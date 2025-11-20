@@ -6,6 +6,7 @@ import { exceptionFilter } from "@/middlewares/exception-filter.middleware";
 import { responseTransformInterceptor } from "@/middlewares/intercept.middleware";
 import cors from "cors";
 import { corsConfig } from "@/configs/cors.config";
+import prisma from "@/prismaClient";
 
 const app = express();
 
@@ -24,6 +25,37 @@ app.use("/api", router);
 app.use(exceptionFilter);
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  logger.success(`🚀 Server is running on port ${PORT}`);
-});
+async function startServer() {
+  try {
+    // Thử kết nối DB (tối đa 30 giây)
+    await prisma.$connect();
+    logger.success("✅ Prisma connected to database successfully!");
+
+    // Bắt đầu lắng nghe request
+    const server = app.listen(PORT, () => {
+      logger.success(`🚀 Server is running on http://localhost:${PORT}`);
+    });
+
+    // Graceful shutdown
+    const shutdown = async () => {
+      logger.warn("Shutting down gracefully...");
+      server.close(async () => {
+        await prisma.$disconnect();
+        logger.info("Prisma disconnected");
+        process.exit(0);
+      });
+    };
+
+    process.on("SIGTERM", shutdown);
+    process.on("SIGINT", shutdown);
+  } catch (error) {
+    logger.error("❌ Failed to connect to database!");
+    console.error(error);
+
+    // Nếu DB không kết nối được → thoát luôn, không chạy server
+    process.exit(1);
+  }
+}
+
+// Gọi hàm khởi động
+startServer();
