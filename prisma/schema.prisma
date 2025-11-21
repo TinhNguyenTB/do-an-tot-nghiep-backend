@@ -7,9 +7,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-//
-// ENUMS
-//
+// ENUMS (Không đổi)
 enum UserStatus {
   ACTIVE
   EXPIRED
@@ -38,13 +36,12 @@ enum SubscriptionStatus {
 //
 
 model Organization {
-  id          BigInt   @id @default(autoincrement())
-  name        String   @db.VarChar(255)
-  description String?  @db.Text
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @default(now()) @map("updated_at")
-
-  // Relations
+  id          BigInt    @id @default(autoincrement())
+  name        String    @db.VarChar(255)
+  description String?   @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  
   users User[]
 }
 
@@ -52,8 +49,13 @@ model Role {
   name        String  @id @db.VarChar(100) // PRIMARY KEY
   description String? @db.Text
 
-  users       User[]
+  // Many-to-Many
+  users       UserRole[]
   permissions RolePermission[]
+
+  // Hierarchical RBAC - Role Inheritance
+  inheritsFrom RoleInheritance[] @relation("InheritsFrom")
+  inheritedBy  RoleInheritance[] @relation("InheritedBy")
 }
 
 model Permission {
@@ -64,8 +66,8 @@ model Permission {
 }
 
 model RolePermission {
-  roleName       String @map("role_name")
-  permissionName String @map("permission_name")
+  roleName         String @map("role_name")
+  permissionName   String @map("permission_name")
 
   role       Role       @relation(fields: [roleName], references: [name])
   permission Permission @relation(fields: [permissionName], references: [name])
@@ -74,64 +76,83 @@ model RolePermission {
   @@map("role_permissions")
 }
 
+// ✨ MODEL MỚI CHO ROLE INHERITANCE
+model RoleInheritance {
+  parentId String @map("parent_role_name") // Role cha (được kế thừa)
+  childId  String @map("child_role_name")  // Role con (kế thừa)
+
+  parent Role @relation("InheritedBy", fields: [parentId], references: [name])
+  child  Role @relation("InheritsFrom", fields: [childId], references: [name])
+
+  @@id([parentId, childId])
+  @@map("role_inheritance")
+}
+
 model User {
-  id             BigInt  @id @default(autoincrement())
-  organizationId BigInt? @map("organization_id")
-  email          String  @unique @db.VarChar(255)
-  password       String  @db.VarChar(255)
-  name           String? @db.VarChar(255)
+  id             BigInt    @id @default(autoincrement())
+  organizationId BigInt?   @map("organization_id")
+  email          String    @unique @db.VarChar(255)
+  password       String    @db.VarChar(255)
+  name           String?   @db.VarChar(255)
 
-  roleName String @map("role_name") // <── tham chiếu Role.name
+  status         UserStatus
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
-  status    UserStatus
-  createdAt DateTime   @default(now()) @map("created_at")
-  updatedAt DateTime   @default(now()) @map("updated_at")
-
-  role              Role               @relation(fields: [roleName], references: [name])
-  organization      Organization?      @relation(fields: [organizationId], references: [id])
-  payments          Payment[]
+  roles           UserRole[]
+  organization    Organization?     @relation(fields: [organizationId], references: [id])
+  payments        Payment[]
   userSubscriptions UserSubscription[]
 }
 
+model UserRole {
+  userId   BigInt @map("user_id")
+  roleName String @map("role_name")
+
+  user User @relation(fields: [userId], references: [id])
+  role Role @relation(fields: [roleName], references: [name])
+
+  @@id([userId, roleName])
+  @@map("user_roles")
+}
+
+
 model Subscription {
-  id        BigInt   @id @default(autoincrement())
-  name      String   @db.VarChar(100) // Basic, Pro, Enterprise
-  duration  Int // số ngày sử dụng
-  price     Decimal  @db.Decimal(12, 2)
+  id      BigInt  @id @default(autoincrement())
+  name    String  @db.VarChar(100) 
+  duration Int 
+  price   Decimal @db.Decimal(12, 2)
   createdAt DateTime @default(now()) @map("created_at")
 
-  // Relations
   payments Payment[]
   userSubs UserSubscription[]
 }
 
 model Payment {
-  id             BigInt        @id @default(autoincrement())
-  userId         BigInt        @map("user_id")
-  subscriptionId BigInt?       @map("subscription_id")
-  amount         Decimal       @db.Decimal(12, 2)
-  paymentType    PaymentType   @map("payment_type")
-  paymentDate    DateTime      @default(now()) @map("payment_date")
-  status         PaymentStatus @default(PENDING)
-  transactionId  String?       @db.VarChar(255)
+  id             BigInt          @id @default(autoincrement())
+  userId         BigInt          @map("user_id")
+  subscriptionId BigInt?         @map("subscription_id")
+  amount         Decimal         @db.Decimal(12, 2)
+  paymentType    PaymentType     @map("payment_type")
+  paymentDate    DateTime        @default(now()) @map("payment_date")
+  status         PaymentStatus   @default(PENDING)
+  transactionId  String?         @db.VarChar(255)
 
-  // Relations
-  user         User               @relation(fields: [userId], references: [id])
-  subscription Subscription?      @relation(fields: [subscriptionId], references: [id])
-  userSubs     UserSubscription[]
+  user           User            @relation(fields: [userId], references: [id])
+  subscription   Subscription?   @relation(fields: [subscriptionId], references: [id])
+  userSubs       UserSubscription[]
 }
 
 model UserSubscription {
-  id             BigInt             @id @default(autoincrement())
-  userId         BigInt             @map("user_id")
-  subscriptionId BigInt             @map("subscription_id")
-  paymentId      BigInt?            @map("payment_id")
-  startDate      DateTime           @map("start_date")
-  endDate        DateTime           @map("end_date")
-  status         SubscriptionStatus @default(ACTIVE)
-  createdAt      DateTime           @default(now()) @map("created_at")
+  id             BigInt              @id @default(autoincrement())
+  userId         BigInt              @map("user_id")
+  subscriptionId BigInt              @map("subscription_id")
+  paymentId      BigInt?             @map("payment_id")
+  startDate      DateTime            @map("start_date")
+  endDate        DateTime            @map("end_date")
+  status         SubscriptionStatus  @default(ACTIVE)
+  createdAt      DateTime            @default(now()) @map("created_at")
 
-  // Relations
   user         User         @relation(fields: [userId], references: [id])
   subscription Subscription @relation(fields: [subscriptionId], references: [id])
   payment      Payment?     @relation(fields: [paymentId], references: [id])
