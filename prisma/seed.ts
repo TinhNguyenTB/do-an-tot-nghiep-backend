@@ -1,10 +1,8 @@
-// prisma/seed.ts
-
-// Thư viện hashing mật khẩu
 import * as bcrypt from "bcrypt";
 
 // Sử dụng instance Singleton
 import prisma from "../src/prismaClient";
+import { UserStatus, PaymentStatus, PaymentType, SubscriptionStatus } from "@prisma/client";
 
 const MOCK_ROLES_LEVEL_3 = [
   {
@@ -107,7 +105,47 @@ async function main() {
   });
   console.log(`Đã tạo ${roleInheritanceData.length} mối quan hệ Kế thừa Vai trò.`);
 
-  // --- 7. Seed User (Tạo một User mẫu) ---
+  // --------------------------------------------------------------------------------
+  // --- 7. Seed Subscriptions (Gói Dịch Vụ) ---
+  // --------------------------------------------------------------------------------
+  const subscriptionData = [
+    {
+      name: "Personal Basic (30 Days)",
+      duration: 30, // 30 ngày
+      price: 30000,
+      userLimit: 1, // Mặc định gói cá nhân là 1 người dùng
+    },
+    {
+      name: "Personal Pro (1 Year)",
+      duration: 365, // 365 ngày (1 năm)
+      price: 300000,
+      userLimit: 1,
+    },
+    {
+      name: "Organization Team (1 Year)",
+      duration: 365, // 365 ngày (1 năm)
+      price: 800000,
+      userLimit: 10, // ✨ GIỚI HẠN TỔ CHỨC: 10 người dùng
+    },
+  ];
+
+  const subscriptions = await Promise.all(
+    subscriptionData.map((data) =>
+      // Sử dụng upsert dựa trên NAME (giả định NAME là unique)
+      prisma.subscription.upsert({
+        where: { name: data.name },
+        update: data,
+        create: data,
+      })
+    )
+  );
+  console.log(`Đã tạo ${subscriptions.length} Gói Dịch Vụ (Subscriptions).`);
+  // Lấy Subscription ID cho bước kế tiếp nếu cần
+  const personalBasicSub = subscriptions.find((s) => s.name === "Personal Basic (30 Days)");
+
+  // --------------------------------------------------------------------------------
+  // --- 8. Seed User (Tạo một User mẫu) ---
+  // --------------------------------------------------------------------------------
 
   // 🔑 BƯỚC HASH MẬT KHẨU
   const plainPassword = "adminpassword123";
@@ -122,7 +160,7 @@ async function main() {
       // 👈 SỬ DỤNG MẬT KHẨU ĐÃ HASH
       password: hashedPassword,
       name: "Admin User",
-      status: "ACTIVE",
+      status: UserStatus.ACTIVE, // Thay đổi: nên sử dụng Enum từ @prisma/client
     },
   });
   console.log(`Đã tạo User mẫu: ${user.email} với mật khẩu đã được hash.`);
@@ -136,6 +174,42 @@ async function main() {
     },
   });
   console.log(`Đã gán role 'admin' cho User mẫu.`);
+
+  // --------------------------------------------------------------------------------
+  // --- 9. Tạo Subscription cho User Admin (Tùy chọn) ---
+  // --------------------------------------------------------------------------------
+  if (personalBasicSub) {
+    // Tạo một Payment giả định thành công
+    const payment = await prisma.payment.create({
+      data: {
+        userId: user.id,
+        subscriptionId: personalBasicSub.id,
+        amount: personalBasicSub.price,
+        paymentType: PaymentType.REGISTER,
+        status: PaymentStatus.SUCCESS,
+        transactionId: `MOCK_TXN_${Date.now()}`,
+      },
+    });
+
+    // Kích hoạt UserSubscription (Gói dịch vụ 30 ngày)
+    const startDate = new Date();
+    const endDate = new Date();
+    endDate.setDate(startDate.getDate() + personalBasicSub.duration); // Thêm 30 ngày
+
+    await prisma.userSubscription.create({
+      data: {
+        userId: user.id,
+        subscriptionId: personalBasicSub.id,
+        paymentId: payment.id,
+        startDate: startDate,
+        endDate: endDate,
+        status: SubscriptionStatus.ACTIVE,
+      },
+    });
+    console.log(`Đã kích hoạt gói dịch vụ "${personalBasicSub.name}" cho Admin User.`);
+  }
+
+  console.log(`Seed hoàn tất.`);
 }
 
 main()
