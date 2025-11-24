@@ -7,11 +7,14 @@ import { responseTransformInterceptor } from "@/middlewares/intercept.middleware
 import cors from "cors";
 import { corsConfig } from "@/configs/cors.config";
 import prisma from "@/prismaClient";
+import { webhookRoute } from "@/routes/webhook.route";
 
 const app = express();
 
 // Cấu hình CORS
 app.use(cors(corsConfig));
+
+app.use("/api/webhook", webhookRoute);
 
 app.use(express.json());
 
