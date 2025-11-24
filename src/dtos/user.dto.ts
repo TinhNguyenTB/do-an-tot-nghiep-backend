@@ -5,7 +5,7 @@ export class RegisterUserDto {
   email!: string;
 
   @IsNotEmpty({ message: "Mật khẩu không được để trống." })
-  @Length(6, 50, { message: "Mật khẩu phải dài từ 6 đến 50 ký tự." })
+  @Length(3, 50, { message: "Mật khẩu phải dài từ 3 đến 50 ký tự." })
   password!: string;
 
   @IsNotEmpty({ message: "Tên không được để trống." })
@@ -17,5 +17,5 @@ export class RegisterUserDto {
   organizationName?: string;
 
   @IsNotEmpty({ message: "ID gói dịch vụ không được để trống." })
-  selectedSubscriptionId!: number;
+  subscriptionId!: number;
 }

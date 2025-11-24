@@ -15,12 +15,16 @@ const createSubscription = wrapAsync(async (req: Request, res: Response) => {
   res.status(StatusCodes.CREATED).json(newSub);
 });
 
-// --- READ ALL ---
+// --- READ ALL (Có Pagination, Sort và Filters) ---
 const getSubscriptions = wrapAsync(async (req: Request, res: Response) => {
-  logger.info("Fetching all subscriptions...");
-  const subs = await subService.getAllSubscriptions();
+  logger.info("Fetching all subscriptions with query params...");
+
+  const queryParams = req.query;
+
+  const result = await subService.getAllSubscriptions(queryParams);
+
   res.locals.message = "Lấy danh sách gói dịch vụ thành công.";
-  res.status(StatusCodes.OK).json(subs);
+  res.status(StatusCodes.OK).json(result);
 });
 
 // --- READ ONE ---
