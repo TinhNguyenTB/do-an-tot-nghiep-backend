@@ -6,6 +6,7 @@ import { RegisterUserDto } from "@/dtos/user.dto";
 import { StatusCodes } from "http-status-codes";
 import { LoginDto } from "@/dtos/login.dto";
 import ms from "ms";
+import { RePaymentDto } from "@/dtos/re-payment.dto";
 
 const registerUser = wrapAsync(async (req: Request, res: Response) => {
   logger.info("Starting user registration (PENDING payment)...");
@@ -59,9 +60,20 @@ const logout = wrapAsync(async (req: Request, res: Response) => {
   res.status(StatusCodes.OK).json();
 });
 
+const rePayment = wrapAsync(async (req: Request, res: Response) => {
+  logger.info("Starting user rePayment)...");
+  const dto = req.body as RePaymentDto;
+  const result = await userService.recreatePaymentSession(dto);
+
+  // 3. Phản hồi thành công (202 Accepted vì cần chờ thanh toán)
+  res.locals.message = "Chuyển hướng thanh toán để kích hoạt.";
+  res.status(StatusCodes.ACCEPTED).json(result);
+});
+
 export const userController = {
   registerUser,
   getUsers,
   login,
   logout,
+  rePayment,
 };

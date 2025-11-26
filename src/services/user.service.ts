@@ -10,6 +10,7 @@ import Stripe from "stripe";
 import { ROLES } from "@/constants/role.constants";
 import { LoginDto } from "@/dtos/login.dto";
 import { generateToken } from "@/utils/jwtProvider";
+import { RePaymentDto } from "@/dtos/re-payment.dto";
 
 /**
  * Thực hiện logic đăng ký: Tạo User và Payment PENDING
@@ -131,6 +132,104 @@ export async function register(dto: RegisterUserDto) {
     userId: newUser.id,
     paymentId: newPayment.id,
     redirectUrl: session.url,
+  };
+}
+
+export async function recreatePaymentSession(dto: RePaymentDto) {
+  // 1. TÌM USER
+  const user = await prisma.user.findUnique({
+    where: { email: dto.email },
+    select: {
+      id: true,
+      email: true,
+      status: true,
+      password: true,
+    },
+  });
+
+  // 2. Kiểm tra sự tồn tại của User
+  if (!user) {
+    throw new HttpException(StatusCodes.FORBIDDEN, "Email hoặc mật khẩu không chính xác.");
+  }
+
+  // 4. So sánh (Xác thực) mật khẩu
+  const isPasswordMatch = await bcrypt.compare(dto.password, user.password);
+
+  if (!isPasswordMatch) {
+    throw new HttpException(StatusCodes.FORBIDDEN, "Email hoặc mật khẩu không chính xác.");
+  }
+
+  // Kiểm tra nhanh trạng thái có còn là PENDING không
+  if (user.status !== "PENDING") {
+    throw new HttpException(
+      StatusCodes.BAD_REQUEST,
+      "Tài khoản không ở trạng thái chờ thanh toán."
+    );
+  }
+
+  // 5. Tìm bản ghi Payment PENDING gần nhất
+  const pendingPayment = await prisma.payment.findFirst({
+    where: { userId: user.id, status: "PENDING" },
+    include: { subscription: true },
+  });
+
+  if (!pendingPayment || !pendingPayment.subscription) {
+    throw new HttpException(
+      StatusCodes.BAD_REQUEST,
+      "Không tìm thấy giao dịch thanh toán đang chờ xử lý."
+    );
+  }
+
+  const subscription = pendingPayment.subscription;
+
+  // 6. Chuẩn bị dữ liệu cho Stripe Session (Logic giữ nguyên)
+  const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+    {
+      quantity: 1,
+      price_data: {
+        currency: "vnd",
+        product_data: {
+          name: subscription.name,
+        },
+        unit_amount: Math.round(pendingPayment.amount.toNumber()),
+      },
+    },
+  ];
+
+  // 7. Đảm bảo Customer ID của Stripe tồn tại
+  let stripe_customer = await prisma.stripeCustomer.findUnique({
+    where: { customerId: user.id },
+    select: { stripeCustomerId: true },
+  });
+
+  if (!stripe_customer) {
+    // Tạo Customer ID mới nếu chưa có
+    const customer = await stripe.customers.create({ email: user.email });
+    stripe_customer = await prisma.stripeCustomer.create({
+      data: { customerId: user.id, stripeCustomerId: customer.id },
+    });
+  }
+
+  // 8. Tạo phiên thanh toán mới (Logic giữ nguyên)
+  const session = await stripe.checkout.sessions.create({
+    customer: stripe_customer.stripeCustomerId,
+    payment_method_types: ["card"],
+    line_items: line_items,
+    mode: "payment",
+    success_url: `${process.env.CLIENT_URL}/login?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${process.env.CLIENT_URL}/login?payment_canceled=true`,
+    metadata: {
+      paymentId: pendingPayment.id,
+      userId: user.id,
+      subscriptionId: subscription.id,
+    },
+  });
+
+  // Trả về URL chuyển hướng
+  return {
+    userId: user.id,
+    paymentId: pendingPayment.id,
+    redirectUrl: session.url, // URL Stripe Checkout mới
   };
 }
 
