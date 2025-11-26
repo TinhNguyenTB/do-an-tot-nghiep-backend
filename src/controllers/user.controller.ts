@@ -4,6 +4,8 @@ import { wrapAsync } from "@/utils/wrapAsync";
 import * as userService from "@/services/user.service";
 import { RegisterUserDto } from "@/dtos/user.dto";
 import { StatusCodes } from "http-status-codes";
+import { LoginDto } from "@/dtos/login.dto";
+import ms from "ms";
 
 const registerUser = wrapAsync(async (req: Request, res: Response) => {
   logger.info("Starting user registration (PENDING payment)...");
@@ -17,16 +19,38 @@ const registerUser = wrapAsync(async (req: Request, res: Response) => {
 
 const getUsers = wrapAsync(async (req: Request, res: Response) => {
   logger.info("Fetching all users with query params...");
-
   const queryParams = req.query;
-
   const result = await userService.getAllUsers(queryParams);
 
   res.locals.message = "Lấy danh người dùng thành công.";
   res.status(StatusCodes.OK).json(result);
 });
 
+const login = wrapAsync(async (req: Request, res: Response) => {
+  logger.info("User login...");
+  const dto = req.body as LoginDto;
+  const result = await userService.handleLogin(dto);
+
+  res.cookie("accessToken", result.accessToken, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+    maxAge: ms("14 days"),
+  });
+
+  res.cookie("refreshToken", result.refreshToken, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+    maxAge: ms("14 days"),
+  });
+
+  res.locals.message = "Đăng nhập thành công.";
+  res.status(StatusCodes.OK).json(result);
+});
+
 export const userController = {
   registerUser,
   getUsers,
+  login,
 };

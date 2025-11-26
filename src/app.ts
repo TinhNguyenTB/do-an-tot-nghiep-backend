@@ -8,12 +8,13 @@ import cors from "cors";
 import { corsConfig } from "@/configs/cors.config";
 import prisma from "@/prismaClient";
 import { webhookRoute } from "@/routes/webhook.route";
+import cookieParser from "cookie-parser";
 
 const app = express();
 
 // Cấu hình CORS
 app.use(cors(corsConfig));
-
+app.use(cookieParser());
 app.use("/api/webhook", webhookRoute);
 
 app.use(express.json());

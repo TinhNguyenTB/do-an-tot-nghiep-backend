@@ -1,13 +1,12 @@
-import prisma from "@/prismaClient"; // Giả định import Prisma Client đã cấu hình
+import prisma from "@/prismaClient";
 import Stripe from "stripe";
-import { HttpException } from "@/exceptions/http-exception"; // Sử dụng HttpException custom
+import { HttpException } from "@/exceptions/http-exception";
 import { StatusCodes } from "http-status-codes";
 import { UserStatus, PaymentStatus, SubscriptionStatus } from "@prisma/client";
-import { stripe } from "@/configs/stripe.config"; // Giả định instance Stripe đã được khởi tạo
-import { logger } from "@/utils/logger"; // Giả định logger
+import { stripe } from "@/configs/stripe.config";
+import { logger } from "@/utils/logger";
 
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
-// const FRONTEND_URL = process.env.FRONTEND_URL; // Không cần thiết trong webhook xử lý logic
 
 /**
  * Hàm tiện ích kiểm tra số nguyên dương an toàn từ chuỗi metadata.
@@ -76,7 +75,6 @@ export async function handleWebhook(rawBody: Buffer, signature: string): Promise
       throw new HttpException(StatusCodes.BAD_REQUEST, "Missing payment intent ID.");
     }
 
-    // BỌC TRONG TRANSACTION ĐỂ ĐẢM BẢO TÍNH NGUYÊN TỬ
     try {
       await prisma.$transaction(async (tx) => {
         // Lấy thông tin gói dịch vụ

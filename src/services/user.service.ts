@@ -7,6 +7,9 @@ import { UserStatus, PaymentType, PaymentStatus, Prisma } from "@prisma/client";
 import { DEFAULT_PAGE, DEFAULT_SIZE } from "@/constants/pagination.constants";
 import { stripe } from "@/configs/stripe.config";
 import Stripe from "stripe";
+import { ROLES } from "@/constants/role.constants";
+import { LoginDto } from "@/dtos/login.dto";
+import { generateToken } from "@/utils/jwtProvider";
 
 /**
  * Thực hiện logic đăng ký: Tạo User và Payment PENDING
@@ -52,7 +55,7 @@ export async function register(dto: RegisterUserDto) {
         // ✨ Gán role mặc định cho user đăng ký mới
         roles: {
           create: {
-            roleName: "client",
+            roleName: ROLES.CLIENT,
           },
         },
       },
@@ -208,5 +211,84 @@ export async function getAllUsers(queryParams: { [key: string]: any }) {
       hasNextPage: page < totalPages,
       hasPreviousPage: page > 1,
     },
+  };
+}
+
+function checkUserStatus(status: UserStatus) {
+  if (status === UserStatus.ACTIVE) {
+    // Nếu ACTIVE thì cho phép tiếp tục đăng nhập
+    return;
+  }
+  // Xử lý các trạng thái không phải ACTIVE
+  switch (status) {
+    case UserStatus.PENDING:
+      throw new HttpException(
+        StatusCodes.FORBIDDEN,
+        "Tài khoản chưa kích hoạt. Vui lòng hoàn tất thanh toán."
+      );
+
+    case UserStatus.SUSPENDED:
+      throw new HttpException(
+        StatusCodes.FORBIDDEN,
+        "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ hỗ trợ."
+      );
+
+    case UserStatus.EXPIRED:
+      throw new HttpException(
+        StatusCodes.FORBIDDEN,
+        "Gói dịch vụ của bạn đã hết hạn. Vui lòng gia hạn để tiếp tục sử dụng."
+      );
+
+    default:
+      throw new HttpException(StatusCodes.FORBIDDEN, "Tài khoản của bạn chưa được kích hoạt.");
+  }
+}
+
+export async function handleLogin(dto: LoginDto) {
+  // 1. Tìm kiếm User theo email
+  const user = await prisma.user.findUnique({
+    where: { email: dto.email },
+    include: {
+      roles: true,
+      organization: true,
+    },
+  });
+
+  // 2. Kiểm tra sự tồn tại của User
+  if (!user) {
+    throw new HttpException(StatusCodes.UNAUTHORIZED, "Email hoặc mật khẩu không chính xác.");
+  }
+
+  // 3. Kiểm tra Trạng thái tài khoản
+  checkUserStatus(user.status);
+
+  // 4. So sánh (Xác thực) mật khẩu
+  const isPasswordMatch = await bcrypt.compare(dto.password, user.password);
+
+  if (!isPasswordMatch) {
+    throw new HttpException(StatusCodes.UNAUTHORIZED, "Email hoặc mật khẩu không chính xác.");
+  }
+
+  // 5. Trường hợp nhập đúng thông tin tài khoản, tạo token và trả về cho phía Client
+  const roleNames = user.roles.map((r) => r.roleName);
+  const userInfo = {
+    id: user.id,
+    email: user.email,
+    roles: roleNames,
+    organizationId: user.organizationId,
+  };
+
+  const accessToken = generateToken(userInfo, process.env.JWT_SECRET!, "10s");
+  const refreshToken = generateToken(
+    userInfo,
+    process.env.REFRESH_TOKEN_SECRET!,
+    "14 days"
+    // 15
+  );
+
+  return {
+    userInfo,
+    accessToken,
+    refreshToken,
   };
 }
