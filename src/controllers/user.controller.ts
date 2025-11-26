@@ -7,6 +7,7 @@ import { StatusCodes } from "http-status-codes";
 import { LoginDto } from "@/dtos/login.dto";
 import ms from "ms";
 import { RePaymentDto } from "@/dtos/re-payment.dto";
+import { generateToken, verifyToken } from "@/utils/jwtProvider";
 
 const registerUser = wrapAsync(async (req: Request, res: Response) => {
   logger.info("Starting user registration (PENDING payment)...");
@@ -70,10 +71,35 @@ const rePayment = wrapAsync(async (req: Request, res: Response) => {
   res.status(StatusCodes.ACCEPTED).json(result);
 });
 
+const refreshToken = wrapAsync(async (req: Request, res: Response) => {
+  logger.info("Refresh token...");
+  const refreshToken = req.cookies.refreshToken;
+  const decoded = verifyToken(refreshToken, process.env.REFRESH_TOKEN_SECRET!);
+
+  const userInfo = {
+    id: decoded.id,
+    email: decoded.email,
+    roles: decoded.roles,
+    organizationId: decoded.organizationId,
+  };
+
+  const accessToken = generateToken(userInfo, process.env.JWT_SECRET!, "10s");
+  res.cookie("accessToken", accessToken, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+    maxAge: ms("14 days"),
+  });
+
+  res.locals.message = "Refresh token thành công";
+  res.status(StatusCodes.OK).json({ accessToken });
+});
+
 export const userController = {
   registerUser,
   getUsers,
   login,
   logout,
   rePayment,
+  refreshToken,
 };

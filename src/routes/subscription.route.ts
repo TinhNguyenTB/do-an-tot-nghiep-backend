@@ -2,10 +2,11 @@ import { Router } from "express";
 import { ValidationPipe } from "@/pipes/validation.pipe";
 import { subscriptionController } from "@/controllers/subscription.controller";
 import { CreateSubscriptionDto } from "@/dtos/subscription.dto";
+import { authMiddleware } from "@/middlewares/auth.middleware";
 
 const router = Router();
 
-router.get("/", subscriptionController.getSubscriptions);
+router.get("/", authMiddleware, subscriptionController.getSubscriptions);
 router.get("/:id", subscriptionController.getSubscription);
 router.patch("/:id", subscriptionController.updateSubscription);
 router.post("/", ValidationPipe(CreateSubscriptionDto), subscriptionController.createSubscription);

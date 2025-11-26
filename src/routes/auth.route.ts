@@ -9,5 +9,6 @@ const router = Router();
 router.post("/register", ValidationPipe(RegisterUserDto), userController.registerUser);
 router.post("/login", ValidationPipe(LoginDto), userController.login);
 router.delete("/logout", userController.logout);
+router.put("/refresh", userController.refreshToken);
 
 export const authRoute = router;
