@@ -256,7 +256,7 @@ export async function handleLogin(dto: LoginDto) {
 
   // 2. Kiểm tra sự tồn tại của User
   if (!user) {
-    throw new HttpException(StatusCodes.UNAUTHORIZED, "Email hoặc mật khẩu không chính xác.");
+    throw new HttpException(StatusCodes.FORBIDDEN, "Email hoặc mật khẩu không chính xác.");
   }
 
   // 3. Kiểm tra Trạng thái tài khoản
@@ -266,7 +266,7 @@ export async function handleLogin(dto: LoginDto) {
   const isPasswordMatch = await bcrypt.compare(dto.password, user.password);
 
   if (!isPasswordMatch) {
-    throw new HttpException(StatusCodes.UNAUTHORIZED, "Email hoặc mật khẩu không chính xác.");
+    throw new HttpException(StatusCodes.FORBIDDEN, "Email hoặc mật khẩu không chính xác.");
   }
 
   // 5. Trường hợp nhập đúng thông tin tài khoản, tạo token và trả về cho phía Client

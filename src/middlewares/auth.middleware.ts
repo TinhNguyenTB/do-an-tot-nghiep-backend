@@ -10,18 +10,12 @@ export interface AuthenticatedRequest extends Request {
 const ACCESS_TOKEN_KEY = "accessToken";
 const JWT_SECRET = process.env.JWT_SECRET;
 
-/**
- * Middleware để xác thực JWT lấy từ Cookie (Key: accessToken)
- */
 export const authMiddleware = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   // 1. ✨ Lấy accessToken từ req.cookies
   const accessToken = req.cookies[ACCESS_TOKEN_KEY];
 
   if (!accessToken) {
-    // Nếu không tìm thấy accessToken trong Cookie
-    return next(
-      new HttpException(StatusCodes.UNAUTHORIZED, "Không tìm thấy accessToken trong Cookie.")
-    );
+    throw new HttpException(StatusCodes.UNAUTHORIZED, "Không tìm thấy accessToken trong Cookie.");
   }
 
   try {
@@ -47,6 +41,6 @@ export const authMiddleware = (req: AuthenticatedRequest, res: Response, next: N
     }
     console.error("Error from authMiddleware:", error);
     // 5. Trả về lỗi
-    res.status(statusCode).json({ message: errorMessage });
+    return res.status(statusCode).json({ message: errorMessage });
   }
 };

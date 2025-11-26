@@ -45,12 +45,23 @@ const login = wrapAsync(async (req: Request, res: Response) => {
     maxAge: ms("14 days"),
   });
 
-  res.locals.message = "Đăng nhập thành công.";
+  res.locals.message = "Đăng nhập thành công";
   res.status(StatusCodes.OK).json(result);
+});
+
+const logout = wrapAsync(async (req: Request, res: Response) => {
+  logger.info("User logout...");
+
+  res.clearCookie("accessToken");
+  res.clearCookie("refreshToken");
+
+  res.locals.message = "Đăng xuất thành công.";
+  res.status(StatusCodes.OK).json();
 });
 
 export const userController = {
   registerUser,
   getUsers,
   login,
+  logout,
 };
