@@ -37,7 +37,7 @@ const login = wrapAsync(async (req: Request, res: Response) => {
     httpOnly: true,
     secure: true,
     sameSite: "none",
-    maxAge: ms("14 days"),
+    maxAge: ms("1d"),
   });
 
   res.cookie("refreshToken", result.refreshToken, {
@@ -83,12 +83,12 @@ const refreshToken = wrapAsync(async (req: Request, res: Response) => {
     organizationId: decoded.organizationId,
   };
 
-  const accessToken = generateToken(userInfo, process.env.JWT_SECRET!, "10s");
+  const accessToken = generateToken(userInfo, process.env.JWT_SECRET!, "1d");
   res.cookie("accessToken", accessToken, {
     httpOnly: true,
     secure: true,
     sameSite: "none",
-    maxAge: ms("14 days"),
+    maxAge: ms("1d"),
   });
 
   res.locals.message = "Refresh token thành công";

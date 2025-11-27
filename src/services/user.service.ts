@@ -377,13 +377,8 @@ export async function handleLogin(dto: LoginDto) {
     organizationId: user.organizationId,
   };
 
-  const accessToken = generateToken(userInfo, process.env.JWT_SECRET!, "10s");
-  const refreshToken = generateToken(
-    userInfo,
-    process.env.REFRESH_TOKEN_SECRET!,
-    "14 days"
-    // 15
-  );
+  const accessToken = generateToken(userInfo, process.env.JWT_SECRET!, "1d");
+  const refreshToken = generateToken(userInfo, process.env.REFRESH_TOKEN_SECRET!, "14d");
 
   return {
     userInfo,
