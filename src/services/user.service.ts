@@ -268,7 +268,6 @@ export async function getAllUsers(queryParams: { [key: string]: any }) {
   if (sortParam) {
     const [field, direction] = sortParam.split(",");
     if (field && (direction === "asc" || direction === "desc")) {
-      // Kiểm tra xem trường sắp xếp có hợp lệ không (cần thêm kiểm tra thực tế)
       orderBy = { [field]: direction };
     }
   }

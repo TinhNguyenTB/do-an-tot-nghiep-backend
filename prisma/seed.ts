@@ -1,29 +1,38 @@
 import * as bcrypt from "bcrypt";
-
-// Sử dụng instance Singleton
 import prisma from "../src/prismaClient";
 import { UserStatus } from "@prisma/client";
 
-const MOCK_ROLES_LEVEL_3 = [
+const MOCK_ROLES = [
   {
     name: "client",
-    permissions: ["create_support", "read_support", "update_support", "delete_support"],
+    permissions: [
+      "read_self_subscription", // Quyền xem gói dịch vụ hiện tại của bản thân
+      "update_self_profile", // Quyền cập nhật thông tin cá nhân
+      "manage_subscription", // Quyền đăng ký, gia hạn gói dịch vụ (Tạo Payment)
+      "read_payments", // Xem lịch sử thanh toán
+    ],
     inherits: [],
   },
   {
-    name: "moderator",
-    permissions: ["create_messages", "read_messages", "update_messages", "delete_messages"],
-    inherits: ["client"],
+    name: "org_admin",
+    permissions: [
+      "manage_organization_users", // Quản lý người dùng trong Org
+
+      // Quản lý Tổ chức và Thanh toán
+      "read_organization_details", // Xem thông tin chi tiết Tổ chức
+      "update_organization_details", // Cập nhật thông tin Tổ chức
+    ],
+    inherits: ["client"], // Kế thừa các quyền cơ bản của client
   },
   {
-    name: "admin",
+    name: "super_admin",
     permissions: [
-      "create_admin_tools",
-      "read_admin_tools",
-      "update_admin_tools",
-      "delete_admin_tools",
+      "manage_system_roles", // Quản lý Role, Permission
+      "manage_all_organizations", // Quản lý tất cả các tổ chức (CRUD)
+      "manage_all_subscriptions", // Quản lý tất cả gói Subscription cơ bản
+      "manage_all_users", // Quản lý/Khóa/Kích hoạt tất cả người dùng
     ],
-    inherits: ["client", "moderator"],
+    inherits: ["client", "org_admin"], // Kế thừa tất cả quyền tổ chức và quyền cơ bản
   },
 ];
 
@@ -32,7 +41,7 @@ async function main() {
 
   // --- 1. Lấy danh sách tất cả các Permissions DUY NHẤT ---
   const allPermissions = new Set<string>();
-  MOCK_ROLES_LEVEL_3.forEach((role) => {
+  MOCK_ROLES.forEach((role) => {
     role.permissions.forEach((perm) => allPermissions.add(perm));
   });
 
@@ -42,7 +51,6 @@ async function main() {
   }));
 
   // --- 2. Xóa dữ liệu cũ (Tùy chọn: cần thận trọng trong môi trường Production!) ---
-  // Thứ tự xóa phải tuân theo quan hệ khóa ngoại ngược:
   await prisma.userSubscription.deleteMany({});
   await prisma.payment.deleteMany({});
   await prisma.userRole.deleteMany({});
@@ -53,6 +61,7 @@ async function main() {
   await prisma.permission.deleteMany({});
   await prisma.subscription.deleteMany({});
   await prisma.organization.deleteMany({});
+  await prisma.stripeCustomer.deleteMany({});
   console.log("Đã xóa dữ liệu cũ.");
 
   // --- 3. Seed Permissions ---
@@ -63,7 +72,7 @@ async function main() {
   console.log(`Đã tạo ${permissionData.length} Permissions.`);
 
   // --- 4. Seed Roles ---
-  const roleData = MOCK_ROLES_LEVEL_3.map((role) => ({
+  const roleData = MOCK_ROLES.map((role) => ({
     name: role.name,
     description: `Vai trò ${role.name}`,
   }));
@@ -75,7 +84,7 @@ async function main() {
 
   // --- 5. Seed RolePermissions (Gán quyền trực tiếp) ---
   const rolePermissionsData: { roleName: string; permissionName: string }[] = [];
-  MOCK_ROLES_LEVEL_3.forEach((role) => {
+  MOCK_ROLES.forEach((role) => {
     role.permissions.forEach((permName) => {
       rolePermissionsData.push({
         roleName: role.name,
@@ -91,11 +100,11 @@ async function main() {
 
   // --- 6. Seed RoleInheritance (Thiết lập kế thừa) ---
   const roleInheritanceData: { parentId: string; childId: string }[] = [];
-  MOCK_ROLES_LEVEL_3.forEach((role) => {
+  MOCK_ROLES.forEach((role) => {
     role.inherits.forEach((parentRoleName) => {
       roleInheritanceData.push({
-        parentId: parentRoleName, // Role cha (được kế thừa)
-        childId: role.name, // Role con (kế thừa)
+        parentId: parentRoleName,
+        childId: role.name,
       });
     });
   });
@@ -105,33 +114,53 @@ async function main() {
   });
   console.log(`Đã tạo ${roleInheritanceData.length} mối quan hệ Kế thừa Vai trò.`);
 
-  // --------------------------------------------------------------------------------
   // --- 7. Seed Subscriptions (Gói Dịch Vụ) ---
-  // --------------------------------------------------------------------------------
   const subscriptionData = [
+    // PERSONAL
     {
-      name: "Personal Basic (30 Days)",
-      duration: 30, // 30 ngày
+      name: "Personal Basic – 30 Days",
+      duration: 30,
       price: 30000,
-      userLimit: 1, // Mặc định gói cá nhân là 1 người dùng
-    },
-    {
-      name: "Personal Pro (1 Year)",
-      duration: 365, // 365 ngày (1 năm)
-      price: 300000,
       userLimit: 1,
     },
     {
-      name: "Organization Team (1 Year)",
-      duration: 365, // 365 ngày (1 năm)
-      price: 800000,
-      userLimit: 100, // ✨ GIỚI HẠN TỔ CHỨC: 100 người dùng
+      name: "Personal Pro – 1 Year",
+      duration: 365,
+      price: 300000,
+      userLimit: 1,
+    },
+
+    // ORGANIZATION (short-term)
+    {
+      name: "Organization Standard – 30 Days",
+      duration: 30,
+      price: 600000,
+      userLimit: 100,
+    },
+    {
+      name: "Organization Standard – 3 Months",
+      duration: 90,
+      price: 1800000,
+      userLimit: 100,
+    },
+    {
+      name: "Organization Standard – 6 Months",
+      duration: 180,
+      price: 3600000,
+      userLimit: 100,
+    },
+
+    // ORGANIZATION (year)
+    {
+      name: "Organization Standard – 1 Year",
+      duration: 365,
+      price: 6000000,
+      userLimit: 100,
     },
   ];
 
   const subscriptions = await Promise.all(
     subscriptionData.map((data) =>
-      // Sử dụng upsert dựa trên NAME (giả định NAME là unique)
       prisma.subscription.upsert({
         where: { name: data.name },
         update: data,
@@ -140,37 +169,58 @@ async function main() {
     )
   );
   console.log(`Đã tạo ${subscriptions.length} Gói Dịch Vụ (Subscriptions).`);
-  // Lấy Subscription ID cho bước kế tiếp nếu cần
 
   // --------------------------------------------------------------------------------
-  // --- 8. Seed User (Tạo một User mẫu) ---
+  // --- 8. Seed User & Organization (Tạo 3 User mẫu) ---
   // --------------------------------------------------------------------------------
 
-  // 🔑 BƯỚC HASH MẬT KHẨU
-  const plainPassword = "admin";
+  // 🔑 BƯỚC HASH MẬT KHẨU CHUNG
+  const plainPassword = "password"; // Mật khẩu chung cho cả 3 user
   const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
-  const user = await prisma.user.create({
+  // Tạo Tổ chức mẫu
+  const org = await prisma.organization.create({
     data: {
-      email: "admin@gmail.com",
-      password: hashedPassword,
-      name: "admin",
-      status: UserStatus.ACTIVE,
+      name: "Acme Corporation",
+      description: "Tổ chức mẫu",
     },
   });
-  console.log(`Đã tạo User mẫu: ${user.email} với mật khẩu đã được hash.`);
-  console.log(`Mật khẩu gốc (Chỉ để kiểm tra): "${plainPassword}"`);
+  console.log(`Đã tạo Tổ chức mẫu: ${org.name}.`);
 
-  // Gán role 'admin' cho user mẫu
-  await prisma.userRole.create({
-    data: {
-      userId: user.id,
-      roleName: "admin",
-    },
-  });
-  console.log(`Đã gán role 'admin' cho User mẫu.`);
+  // --- TẠO 3 USERS MẪU ---
+  const usersToCreate = [
+    { email: "superadmin@gmail.com", role: "super_admin", name: "System Admin" },
+    { email: "orgadmin@gmail.com", role: "org_admin", name: "Org Admin" },
+    { email: "client@gmail.com", role: "client", name: "Client" },
+  ];
 
-  console.log(`Seed hoàn tất.`);
+  for (const userData of usersToCreate) {
+    // ✨ LOGIC ĐIỀU CHỈNH: Chỉ gán organizationId nếu role là 'org_admin'
+    const organizationId = userData.role === "org_admin" ? org.id : null;
+
+    const user = await prisma.user.create({
+      data: {
+        email: userData.email,
+        password: hashedPassword,
+        name: userData.name,
+        status: UserStatus.ACTIVE,
+        // ✨ Gán organizationId (null cho super_admin và client)
+        organizationId: organizationId,
+      },
+    });
+
+    // Gán role tương ứng
+    await prisma.userRole.create({
+      data: {
+        userId: user.id,
+        roleName: userData.role,
+      },
+    });
+
+    const orgStatus = organizationId ? `(Org ID: ${organizationId})` : `(Không có Org)`;
+    console.log(`Đã tạo User: ${user.email} với role '${userData.role}' ${orgStatus}.`);
+  }
+  console.log(`Seed hoàn tất. 🔑 Mật khẩu chung cho tất cả user là: "${plainPassword}"`);
 }
 
 main()

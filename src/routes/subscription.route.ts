@@ -7,15 +7,35 @@ import { rbacMiddleware } from "@/middlewares/rbac.middleware";
 
 const router = Router();
 
+router.get("/", subscriptionController.getSubscriptions);
+
 router.get(
+  "/:id",
+  authMiddleware,
+  rbacMiddleware.isValidPermission(["manage_all_subscriptions"]),
+  subscriptionController.getSubscription
+);
+
+router.patch(
+  "/:id",
+  authMiddleware,
+  rbacMiddleware.isValidPermission(["manage_all_subscriptions"]),
+  subscriptionController.updateSubscription
+);
+
+router.post(
   "/",
   authMiddleware,
-  rbacMiddleware.isValidPermission(["create_messages"]),
-  subscriptionController.getSubscriptions
+  rbacMiddleware.isValidPermission(["manage_all_subscriptions"]),
+  ValidationPipe(CreateSubscriptionDto),
+  subscriptionController.createSubscription
 );
-router.get("/:id", subscriptionController.getSubscription);
-router.patch("/:id", subscriptionController.updateSubscription);
-router.post("/", ValidationPipe(CreateSubscriptionDto), subscriptionController.createSubscription);
-router.delete("/:id", subscriptionController.deleteSubscription);
+
+router.delete(
+  "/:id",
+  authMiddleware,
+  rbacMiddleware.isValidPermission(["manage_all_subscriptions"]),
+  subscriptionController.deleteSubscription
+);
 
 export const subscriptionRoute = router;
