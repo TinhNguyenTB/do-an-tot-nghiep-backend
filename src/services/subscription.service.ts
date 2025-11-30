@@ -24,41 +24,14 @@ export async function createSubscription(dto: CreateSubscriptionDto) {
   });
 }
 
-/**
- * Phân tích chuỗi sort thành đối tượng orderBy của Prisma.
- * Ví dụ: "name,asc" -> { name: 'asc' }
- */
-function parseSort(
-  sort: string | undefined
-): Prisma.SubscriptionOrderByWithRelationInput | undefined {
-  if (!sort) return undefined;
-
-  const [field, direction] = sort.split(",");
-  if (!field || !direction) return undefined;
-
-  const orderBy = direction.toLowerCase() === "asc" ? "asc" : "desc";
-
-  // Đảm bảo trường sắp xếp hợp lệ theo Model Subscription
-  const validFields = ["id", "name", "duration", "price", "userLimit", "createdAt"];
-  if (!validFields.includes(field)) {
-    return undefined;
-  }
-
-  return { [field]: orderBy } as Prisma.SubscriptionOrderByWithRelationInput;
-}
-
 // --- READ ALL ---
 export async function getAllSubscriptions(queryParams: { [key: string]: any }) {
   // Trích xuất các tham số chính và bộ lọc
   const page = Number(queryParams.page) || 1;
   const size = Number(queryParams.size) || 10;
-  const sort = queryParams.sort as string | undefined;
 
   // 1. Tính toán SKIP (Offset)
   const skip = (page - 1) * size;
-
-  // 2. Phân tích tham số sort
-  const orderBy = parseSort(sort);
 
   // 3. Xây dựng điều kiện WHERE (Filters)
   const where: Prisma.SubscriptionWhereInput = {};
@@ -88,7 +61,7 @@ export async function getAllSubscriptions(queryParams: { [key: string]: any }) {
     prisma.subscription.findMany({
       skip: skip,
       take: size,
-      orderBy: orderBy,
+      orderBy: { createdAt: "desc" },
       where: where,
       select: {
         id: true,

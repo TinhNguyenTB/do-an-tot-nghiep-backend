@@ -14,6 +14,20 @@ router.get(
   userController.getUsers
 );
 
+router.get(
+  "/:id",
+  authMiddleware,
+  rbacMiddleware.isValidPermission(["manage_all_users"]),
+  userController.getUserDetails
+);
+
+router.patch(
+  "/:id",
+  authMiddleware,
+  rbacMiddleware.isValidPermission(["manage_all_users"]),
+  userController.updateUser
+);
+
 router.post("/re-payment", ValidationPipe(RePaymentDto), userController.rePayment);
 
 export const userRoute = router;

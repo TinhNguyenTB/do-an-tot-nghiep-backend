@@ -49,6 +49,8 @@ model Role {
   name          String  @id @db.VarChar(100) // PRIMARY KEY
   description   String? @db.Text
 
+ createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
   // Many-to-Many
   users         UserRole[]
   permissions   RolePermission[]
@@ -62,6 +64,9 @@ model Permission {
   name          String  @id @db.VarChar(100) // PRIMARY KEY
   description   String? @db.Text
 
+   createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
   roles RolePermission[]
 }
 
@@ -71,6 +76,9 @@ model RolePermission {
 
   role       Role       @relation(fields: [roleName], references: [name])
   permission Permission @relation(fields: [permissionName], references: [name])
+
+   createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   @@id([roleName, permissionName])
   @@map("role_permissions")
@@ -83,6 +91,9 @@ model RoleInheritance {
 
   parent Role @relation("InheritedBy", fields: [parentId], references: [name])
   child  Role @relation("InheritsFrom", fields: [childId], references: [name])
+
+   createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   @@id([parentId, childId])
   @@map("role_inheritance")
@@ -112,6 +123,9 @@ model UserRole {
   user User @relation(fields: [userId], references: [id])
   role Role @relation(fields: [roleName], references: [name])
 
+   createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
   @@id([userId, roleName])
   @@map("user_roles")
 }
@@ -123,7 +137,8 @@ model Subscription {
   duration  Int 
   price     Decimal @db.Decimal(12, 2)
   userLimit Int?    @map("user_limit")
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   payments   Payment[]
   userSubs   UserSubscription[]

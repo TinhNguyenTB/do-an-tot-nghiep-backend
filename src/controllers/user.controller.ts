@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { logger } from "@/utils/logger";
 import { wrapAsync } from "@/utils/wrapAsync";
 import * as userService from "@/services/user.service";
-import { RegisterUserDto } from "@/dtos/user.dto";
+import { RegisterUserDto, UpdateUserDto } from "@/dtos/user.dto";
 import { StatusCodes } from "http-status-codes";
 import { LoginDto } from "@/dtos/login.dto";
 import ms from "ms";
@@ -79,6 +79,7 @@ const refreshToken = wrapAsync(async (req: Request, res: Response) => {
   const userInfo = {
     id: decoded.id,
     email: decoded.email,
+    name: decoded.name,
     roles: decoded.roles,
     organizationId: decoded.organizationId,
   };
@@ -95,6 +96,25 @@ const refreshToken = wrapAsync(async (req: Request, res: Response) => {
   res.status(StatusCodes.OK).json({ accessToken });
 });
 
+const getUserDetails = wrapAsync(async (req: Request, res: Response) => {
+  logger.info("Fetching user details...");
+  const id = Number(req.params.id);
+  const result = await userService.getUserById(id);
+
+  res.locals.message = "Lấy chi tiết người dùng thành công.";
+  res.status(StatusCodes.OK).json(result);
+});
+
+const updateUser = wrapAsync(async (req: Request, res: Response) => {
+  logger.info("Fetching user details...");
+  const id = Number(req.params.id);
+  const body = req.body as UpdateUserDto;
+  const result = await userService.updateUser(id, body);
+
+  res.locals.message = "Lấy danh người dùng thành công.";
+  res.status(StatusCodes.OK).json(result);
+});
+
 export const userController = {
   registerUser,
   getUsers,
@@ -102,4 +122,6 @@ export const userController = {
   logout,
   rePayment,
   refreshToken,
+  getUserDetails,
+  updateUser,
 };

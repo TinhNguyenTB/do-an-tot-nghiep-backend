@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsNumber, IsOptional, Min } from "class-validator";
+import { IsNotEmpty, IsString, IsNumber, Min } from "class-validator";
 
 export class CreateSubscriptionDto {
   @IsNotEmpty()
@@ -10,11 +10,10 @@ export class CreateSubscriptionDto {
   duration!: number; // Số ngày
 
   @IsNotEmpty()
-  @IsNumber()
-  price!: number;
+  @IsString()
+  price!: string;
 
-  @IsOptional()
   @IsNumber()
   @Min(1)
-  userLimit?: number; // Giới hạn số người dùng (NULL cho gói cá nhân)
+  userLimit!: number;
 }

@@ -13,6 +13,7 @@ interface JwtPayload {
 export interface VerifiedPayload {
   id: number;
   email: string;
+  name: string;
   roles: string[]; // Lưu ý: roles đã được ánh xạ thành mảng string
   organizationId?: number | null;
   iat: number; // Issued at

@@ -1,5 +1,5 @@
 import { HttpException } from "@/exceptions/http-exception";
-import { RegisterUserDto } from "@/dtos/user.dto";
+import { RegisterUserDto, UpdateUserDto } from "@/dtos/user.dto";
 import prisma from "@/prismaClient";
 import { StatusCodes } from "http-status-codes";
 import * as bcrypt from "bcrypt";
@@ -234,12 +234,8 @@ export async function recreatePaymentSession(dto: RePaymentDto) {
 }
 
 export async function getAllUsers(queryParams: { [key: string]: any }) {
-  // Trích xuất các tham số chính và bộ lọc
   const page = Number(queryParams.page) || DEFAULT_PAGE;
   const size = Number(queryParams.size) || DEFAULT_SIZE;
-
-  // Tham số sắp xếp (ví dụ: 'name,asc' hoặc 'createdAt,desc')
-  const sortParam: string | undefined = queryParams.sort;
 
   // 1. Tính toán SKIP (Offset)
   const skip = (page - 1) * size;
@@ -247,7 +243,7 @@ export async function getAllUsers(queryParams: { [key: string]: any }) {
   // 2. Xây dựng điều kiện WHERE (Filters)
   const where: Prisma.UserWhereInput = {};
 
-  // Các trường lọc hợp lệ của model User (Giả định: email, name, status)
+  // Các trường lọc hợp lệ của model User
   const validFilterFields = ["email", "name"];
 
   for (const key of validFilterFields) {
@@ -265,13 +261,6 @@ export async function getAllUsers(queryParams: { [key: string]: any }) {
   // 3. Xây dựng ORDER BY (Sorting)
   let orderBy: Prisma.UserOrderByWithRelationInput = { createdAt: "desc" }; // Mặc định sắp xếp theo ngày tạo
 
-  if (sortParam) {
-    const [field, direction] = sortParam.split(",");
-    if (field && (direction === "asc" || direction === "desc")) {
-      orderBy = { [field]: direction };
-    }
-  }
-
   // 4. Sử dụng Transaction
   const [data, totalCount] = await prisma.$transaction([
     // Truy vấn DATA: Dùng prisma.user.findMany và áp dụng WHERE, ORDER BY
@@ -285,7 +274,12 @@ export async function getAllUsers(queryParams: { [key: string]: any }) {
         name: true,
         email: true,
         status: true,
-        organizationId: true,
+        organization: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         createdAt: true,
         // Lấy thêm Role
         roles: true,
@@ -298,9 +292,23 @@ export async function getAllUsers(queryParams: { [key: string]: any }) {
   ]);
 
   const totalPages = Math.ceil(totalCount / size);
+  const content = data.map((user) => {
+    const { roles, organization, ...rest } = user;
+
+    const roleNames = roles.map((r) => r.roleName);
+    const organizationName = organization?.name || null;
+    const organizationId = organization?.id || null;
+
+    return {
+      ...rest,
+      roles: roleNames,
+      organizationId: organizationId,
+      organizationName: organizationName,
+    };
+  });
 
   return {
-    content: data,
+    content,
     meta: {
       totalItems: totalCount,
       totalPages: totalPages,
@@ -372,6 +380,7 @@ export async function handleLogin(dto: LoginDto) {
   const userInfo = {
     id: user.id,
     email: user.email,
+    name: user.name,
     roles: roleNames,
     organizationId: user.organizationId,
   };
@@ -384,4 +393,100 @@ export async function handleLogin(dto: LoginDto) {
     accessToken,
     refreshToken,
   };
+}
+
+async function checkUserExists(id: number): Promise<boolean> {
+  const count = await prisma.user.count({
+    where: { id: id },
+  });
+  // Nếu count > 0, tức là tồn tại.
+  return count > 0;
+}
+
+export async function getUserById(id: number) {
+  const user = await prisma.user.findUnique({
+    where: { id: id },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      status: true,
+      roles: {
+        select: {
+          roleName: true,
+        },
+      },
+    },
+  });
+  if (!user) {
+    throw new HttpException(StatusCodes.NOT_FOUND, "Người dùng không tìm thấy");
+  }
+  return {
+    ...user,
+    roles: user?.roles.map((r) => r.roleName) ?? [],
+  };
+}
+
+export async function updateUser(id: number, dto: Partial<UpdateUserDto>) {
+  const exists = await checkUserExists(id);
+  if (!exists) {
+    throw new HttpException(StatusCodes.NOT_FOUND, "Người dùng không tìm thấy");
+  }
+
+  // Validate roles nếu truyền vào
+  if (dto.roles && dto.roles.length > 0) {
+    const roles = await prisma.role.findMany({
+      where: { name: { in: dto.roles } },
+      select: { name: true },
+    });
+
+    const validRoles = roles.map((r) => r.name);
+
+    if (validRoles.length !== dto.roles.length) {
+      throw new HttpException(StatusCodes.BAD_REQUEST, "Một hoặc nhiều role không hợp lệ");
+    }
+  }
+
+  return prisma.$transaction(async (tx) => {
+    // ---- UPDATE USER NAME ----
+    await tx.user.update({
+      where: { id },
+      data: { name: dto.name },
+    });
+
+    // ---- UPDATE USER ROLES ----
+    if (dto.roles) {
+      await tx.userRole.deleteMany({ where: { userId: id } });
+
+      await tx.userRole.createMany({
+        data: dto.roles.map((roleName) => ({
+          userId: id,
+          roleName,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    // ---- RETURN USER + ROLE NAMES ----
+    const userWithRoles = await tx.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        status: true,
+        createdAt: true,
+        roles: {
+          select: {
+            roleName: true,
+          },
+        },
+      },
+    });
+
+    return {
+      ...userWithRoles,
+      roles: userWithRoles?.roles.map((r) => r.roleName) ?? [],
+    };
+  });
 }
