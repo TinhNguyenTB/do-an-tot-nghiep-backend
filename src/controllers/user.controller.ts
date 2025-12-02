@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { logger } from "@/utils/logger";
 import { wrapAsync } from "@/utils/wrapAsync";
 import * as userService from "@/services/user.service";
-import { RegisterUserDto, UpdateUserDto } from "@/dtos/user.dto";
+import { CreateUserDto, RegisterUserDto, UpdateUserDto } from "@/dtos/user.dto";
 import { StatusCodes } from "http-status-codes";
 import { LoginDto } from "@/dtos/login.dto";
 import ms from "ms";
@@ -111,7 +111,18 @@ const updateUser = wrapAsync(async (req: Request, res: Response) => {
   const body = req.body as UpdateUserDto;
   const result = await userService.updateUser(id, body);
 
-  res.locals.message = "Lấy danh người dùng thành công.";
+  res.locals.message = "Cập nhật người dùng thành công.";
+  res.status(StatusCodes.OK).json(result);
+});
+
+const createUser = wrapAsync(async (req: Request, res: Response) => {
+  logger.info("Creating user...");
+  const body = req.body as CreateUserDto;
+  const defaultPassword = "password";
+
+  const result = await userService.createUser(body, defaultPassword);
+
+  res.locals.message = `Thêm người dùng thành công. Mật khẩu mặc định: ${defaultPassword}`;
   res.status(StatusCodes.OK).json(result);
 });
 
@@ -124,4 +135,5 @@ export const userController = {
   refreshToken,
   getUserDetails,
   updateUser,
+  createUser,
 };

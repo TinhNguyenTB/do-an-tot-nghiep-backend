@@ -14,6 +14,13 @@ router.get(
   userController.getUsers
 );
 
+router.post(
+  "/",
+  authMiddleware,
+  rbacMiddleware.isValidPermission(["manage_all_users"]),
+  userController.createUser
+);
+
 router.get(
   "/:id",
   authMiddleware,

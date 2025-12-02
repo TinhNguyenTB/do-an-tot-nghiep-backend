@@ -1,5 +1,5 @@
 import { HttpException } from "@/exceptions/http-exception";
-import { RegisterUserDto, UpdateUserDto } from "@/dtos/user.dto";
+import { CreateUserDto, RegisterUserDto, UpdateUserDto } from "@/dtos/user.dto";
 import prisma from "@/prismaClient";
 import { StatusCodes } from "http-status-codes";
 import * as bcrypt from "bcrypt";
@@ -11,6 +11,43 @@ import { ROLES } from "@/constants/role.constants";
 import { LoginDto } from "@/dtos/login.dto";
 import { generateToken } from "@/utils/jwtProvider";
 import { RePaymentDto } from "@/dtos/re-payment.dto";
+
+export async function createUser(dto: CreateUserDto, defaultPassword: string) {
+  const existingUser = await prisma.user.findUnique({ where: { email: dto.email } });
+  if (existingUser) {
+    throw new HttpException(StatusCodes.CONFLICT, "Email đã được sử dụng.");
+  }
+
+  if (dto.organizationId) {
+    const organization = await prisma.organization.findUnique({
+      where: { id: dto.organizationId },
+    });
+    if (!organization) {
+      throw new HttpException(StatusCodes.NOT_FOUND, "Tổ chức không tìm thấy");
+    }
+  }
+  const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+  const user = await prisma.user.create({
+    data: {
+      organizationId: dto.organizationId,
+      email: dto.email,
+      password: hashedPassword,
+      name: dto.name || "Người dùng mới",
+      status: UserStatus.ACTIVE,
+      roles: {
+        create: dto.roles.map((roleName) => ({
+          // Với mỗi tên vai trò trong mảng, tạo một bản ghi UserRole mới.
+          roleName: roleName,
+          // userId sẽ tự động được Prisma điền vào.
+        })),
+      },
+    },
+  });
+  return {
+    userId: user.id,
+    email: user.email,
+  };
+}
 
 /**
  * Thực hiện logic đăng ký: Tạo User và Payment PENDING
@@ -411,6 +448,7 @@ export async function getUserById(id: number) {
       name: true,
       email: true,
       status: true,
+      organizationId: true,
       roles: {
         select: {
           roleName: true,
@@ -476,6 +514,7 @@ export async function updateUser(id: number, dto: Partial<UpdateUserDto>) {
         email: true,
         status: true,
         createdAt: true,
+        organizationId: true,
         roles: {
           select: {
             roleName: true,

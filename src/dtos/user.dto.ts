@@ -1,4 +1,12 @@
-import { IsArray, IsEmail, IsNotEmpty, IsOptional, IsString, Length } from "class-validator";
+import {
+  IsArray,
+  IsEmail,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Length,
+} from "class-validator";
 
 export class RegisterUserDto {
   @IsEmail({}, { message: "Email phải có định dạng hợp lệ." })
@@ -24,6 +32,22 @@ export class UpdateUserDto {
   @IsNotEmpty({ message: "Tên không được để trống." })
   @Length(2, 100, { message: "Tên phải dài từ 2 đến 100 ký tự." })
   name!: string;
+
+  @IsArray()
+  roles!: string[];
+}
+
+export class CreateUserDto {
+  @IsNotEmpty({ message: "Tên không được để trống." })
+  @Length(2, 100, { message: "Tên phải dài từ 2 đến 100 ký tự." })
+  name!: string;
+
+  @IsEmail({}, { message: "Email phải có định dạng hợp lệ." })
+  email!: string;
+
+  @IsOptional()
+  @IsNumber()
+  organizationId?: number;
 
   @IsArray()
   roles!: string[];
