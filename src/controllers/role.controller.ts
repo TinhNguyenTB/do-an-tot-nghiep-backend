@@ -3,6 +3,7 @@ import { logger } from "@/utils/logger";
 import { wrapAsync } from "@/utils/wrapAsync";
 import { StatusCodes } from "http-status-codes";
 import * as roleService from "@/services/role.service";
+import { renderTemplate, transporter } from "@/configs/email.config";
 
 // // --- CREATE ---
 // const createSubscription = wrapAsync(async (req: Request, res: Response) => {
@@ -50,6 +51,20 @@ const getRoles = wrapAsync(async (req: Request, res: Response) => {
 //   res.status(StatusCodes.NO_CONTENT).send(); // Phản hồi 204 No Content
 // });
 
+const sendWelcomeMail = async (to: string, context: any) => {
+  const html = renderTemplate("emails/welcome", context);
+
+  await transporter.sendMail({
+    from: process.env.EMAIL_USER,
+    to,
+    subject: "Welcome!",
+    html,
+  });
+
+  console.log("Email sent!");
+};
+
 export const roleController = {
   getRoles,
+  sendWelcomeMail,
 };

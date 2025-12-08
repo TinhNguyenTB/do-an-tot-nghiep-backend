@@ -13,6 +13,23 @@ router.get(
   roleController.getRoles
 );
 
+router.post("/send-welcome", async (req, res) => {
+  try {
+    const { to, name } = req.body;
+
+    if (!to) {
+      return res.status(400).json({ message: "Missing field: to" });
+    }
+
+    await roleController.sendWelcomeMail(to, { name });
+
+    return res.json({ message: "Email sent successfully!" });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Failed to send email" });
+  }
+});
+
 // router.get(
 //   "/:id",
 //   authMiddleware,
