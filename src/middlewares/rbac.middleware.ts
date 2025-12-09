@@ -19,7 +19,7 @@ export const dynamicRbacMiddleware = async (
   }
 
   // 2. Lấy Route Path: Đây là path trong file router (ví dụ: '/:id', '/')
-  // Cần đảm bảo rằng routePath này khớp với routePath trong DB (RoutePermission)
+  // Cần đảm bảo rằng routePath này khớp với endpoint trong DB (EndpointPermission)
   const routePath = req.route?.path;
   const httpMethod = req.method;
 
@@ -31,11 +31,11 @@ export const dynamicRbacMiddleware = async (
   }
 
   // 3. Truy vấn DB để lấy Permission BẮT BUỘC cho endpoint này
-  const routePermission = await prisma.routePermission.findUnique({
+  const routePermission = await prisma.endpointPermission.findUnique({
     where: {
-      httpMethod_routePath: {
+      httpMethod_endpoint: {
         httpMethod: httpMethod,
-        routePath: routePath,
+        endpoint: routePath,
       },
     },
     select: { permissionName: true },

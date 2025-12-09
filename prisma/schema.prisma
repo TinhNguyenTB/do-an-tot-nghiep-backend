@@ -63,7 +63,7 @@ model Role {
 model Permission {
   name        String            @id @db.VarChar(100) // PRIMARY KEY
   description String?           @db.Text
-  routes      RoutePermission[] // Một Permission có thể được dùng cho nhiều RoutePermission
+  endpoints      EndpointPermission[] // Một Permission có thể được dùng cho nhiều endpoint
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -182,10 +182,10 @@ model StripeCustomer {
   createdAt DateTime @default(now()) @map("created_at")
 }
 
-model RoutePermission {
+model EndpointPermission {
   id             Int    @id @default(autoincrement())
   httpMethod     String @map("http_method") @db.VarChar(10) // GET, POST, PATCH, DELETE
-  routePath      String @map("route_path") @db.VarChar(255) // Ví dụ: /subscriptions/:id
+  endpoint      String  @db.VarChar(255) // Ví dụ: /subscriptions/:id
   permissionName String @map("permission_name")
 
   permission Permission @relation(fields: [permissionName], references: [name])
@@ -193,7 +193,7 @@ model RoutePermission {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // Đảm bảo không có hai bản ghi RoutePermission giống nhau (Method + Path)
-  @@unique([httpMethod, routePath])
-  @@map("route_permissions_mapping")
+  // Đảm bảo không có hai bản ghi RoutePermission giống nhau (Method + endpoint)
+  @@unique([httpMethod, endpoint])
+  @@map("endpoint_permissions")
 }

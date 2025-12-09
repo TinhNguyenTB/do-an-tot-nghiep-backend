@@ -28,6 +28,7 @@ const MOCK_ROLES = [
   {
     name: "super_admin",
     permissions: [
+      "manage_all_endpoint_permissions",
       "read_subscriptions_details",
       "manage_system_roles", // Quản lý Role, Permission
       "manage_all_organizations", // Quản lý tất cả các tổ chức (CRUD)
@@ -54,7 +55,7 @@ async function main() {
 
   // --- 2. Xóa dữ liệu cũ (Tùy chọn: cần thận trọng trong môi trường Production!) ---
   await prisma.userSubscription.deleteMany({});
-  await prisma.routePermission.deleteMany({});
+  await prisma.endpointPermission.deleteMany({});
   await prisma.payment.deleteMany({});
   await prisma.userRole.deleteMany({});
   await prisma.roleInheritance.deleteMany({});
@@ -226,62 +227,89 @@ async function main() {
 
   console.log("Bắt đầu Seed Route Permissions...");
 
-  const routePermissionsData = [
+  const endpointPermissionsData = [
     // --- 1. SUBSCRIPTIONS ROUTES (QUẢN LÝ GÓI) ---
     {
       httpMethod: "GET",
-      routePath: "/subscriptions",
+      endpoint: "/subscriptions",
       permissionName: "read_all_subscriptions",
     },
     {
       httpMethod: "GET",
-      routePath: "/subscriptions/:id",
+      endpoint: "/subscriptions/:id",
       permissionName: "read_subscriptions_details",
     },
     {
       httpMethod: "PATCH",
-      routePath: "/subscriptions/:id",
+      endpoint: "/subscriptions/:id",
       permissionName: "manage_all_subscriptions",
     },
-    { httpMethod: "POST", routePath: "/subscriptions", permissionName: "manage_all_subscriptions" },
+    { httpMethod: "POST", endpoint: "/subscriptions", permissionName: "manage_all_subscriptions" },
     {
       httpMethod: "DELETE",
-      routePath: "/subscriptions/:id",
+      endpoint: "/subscriptions/:id",
       permissionName: "manage_all_subscriptions",
     },
 
     // --- 2. USERS ROUTES (QUẢN LÝ TẤT CẢ USER) ---
-    { httpMethod: "GET", routePath: "/users", permissionName: "manage_all_users" },
-    { httpMethod: "GET", routePath: "/users/:id", permissionName: "manage_all_users" },
-    { httpMethod: "PATCH", routePath: "/users/:id", permissionName: "manage_all_users" },
-    { httpMethod: "DELETE", routePath: "/users/:id", permissionName: "manage_all_users" },
+    { httpMethod: "GET", endpoint: "/users", permissionName: "manage_all_users" },
+    { httpMethod: "GET", endpoint: "/users/:id", permissionName: "manage_all_users" },
+    { httpMethod: "PATCH", endpoint: "/users/:id", permissionName: "manage_all_users" },
+    { httpMethod: "DELETE", endpoint: "/users/:id", permissionName: "manage_all_users" },
 
     // --- 3. ROLES ROUTES (QUẢN LÝ RBAC) ---
-    { httpMethod: "GET", routePath: "/roles", permissionName: "manage_system_roles" },
-    { httpMethod: "POST", routePath: "/roles", permissionName: "manage_system_roles" },
-    { httpMethod: "PATCH", routePath: "/roles/:name", permissionName: "manage_system_roles" },
-    { httpMethod: "DELETE", routePath: "/roles/:name", permissionName: "manage_system_roles" },
+    { httpMethod: "GET", endpoint: "/roles", permissionName: "manage_system_roles" },
+    { httpMethod: "POST", endpoint: "/roles", permissionName: "manage_system_roles" },
+    { httpMethod: "PATCH", endpoint: "/roles/:name", permissionName: "manage_system_roles" },
+    { httpMethod: "DELETE", endpoint: "/roles/:name", permissionName: "manage_system_roles" },
 
     // --- 4. ORGANIZATION ROUTES (QUẢN LÝ TỔ CHỨC) ---
-    { httpMethod: "GET", routePath: "/organizations", permissionName: "manage_all_organizations" },
+    { httpMethod: "GET", endpoint: "/organizations", permissionName: "manage_all_organizations" },
     {
       httpMethod: "GET",
-      routePath: "/organizations/:id",
+      endpoint: "/organizations/:id",
       permissionName: "read_organization_details",
     },
     {
       httpMethod: "PATCH",
-      routePath: "/organizations/:id",
+      endpoint: "/organizations/:id",
       permissionName: "update_organization_details",
     },
-    { httpMethod: "POST", routePath: "/organizations", permissionName: "manage_all_organizations" },
+    { httpMethod: "POST", endpoint: "/organizations", permissionName: "manage_all_organizations" },
+
+    // --- 5. ROUTE-PERMISSION ROUTES ---
+    {
+      httpMethod: "GET",
+      endpoint: "/endpoint-permissions",
+      permissionName: "manage_all_endpoint_permissions",
+    },
+    {
+      httpMethod: "GET",
+      endpoint: "/endpoint-permissions/:id",
+      permissionName: "manage_all_endpoint_permissions",
+    },
+    {
+      httpMethod: "POST",
+      endpoint: "/endpoint-permissions",
+      permissionName: "manage_all_endpoint_permissions",
+    },
+    {
+      httpMethod: "PATCH",
+      endpoint: "/endpoint-permissions/:id",
+      permissionName: "manage_all_endpoint_permissions",
+    },
+    {
+      httpMethod: "DELETE",
+      endpoint: "/endpoint-permissions/:id",
+      permissionName: "manage_all_endpoint_permissions",
+    },
   ];
 
-  await prisma.routePermission.createMany({
-    data: routePermissionsData,
+  await prisma.endpointPermission.createMany({
+    data: endpointPermissionsData,
     skipDuplicates: true,
   });
-  console.log(`Đã tạo ${routePermissionsData.length} Route Permissions.`);
+  console.log(`Đã tạo ${endpointPermissionsData.length} Endpoint Permissions.`);
 
   console.log(`Seed hoàn tất. 🔑 Mật khẩu chung cho tất cả user là: "${plainPassword}"`);
 }

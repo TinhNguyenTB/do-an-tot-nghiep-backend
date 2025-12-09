@@ -4,9 +4,18 @@ import { subscriptionRoute } from "@/routes/subscription.route";
 import { authRoute } from "@/routes/auth.route";
 import { roleRoute } from "@/routes/role.route";
 import { organizationRoute } from "@/routes/organization.route";
+import { endpointPermissionRoute } from "@/routes/endpoint-permission.route";
 
 const router = Router();
 
-router.use("/", authRoute, userRoute, subscriptionRoute, roleRoute, organizationRoute);
+router.use(
+  "/",
+  authRoute,
+  userRoute,
+  subscriptionRoute,
+  roleRoute,
+  organizationRoute,
+  endpointPermissionRoute
+);
 
 export default router;
