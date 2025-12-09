@@ -8,7 +8,7 @@ import { logger } from "@/utils/logger";
 /**
  * Middleware kiểm tra quyền truy cập động dựa trên Route Path và HTTP Method
  */
-export const dynamicRbacMiddleware = async (
+export const rbacMiddleware = async (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
@@ -53,6 +53,7 @@ export const dynamicRbacMiddleware = async (
 
   // 5. Lấy tất cả quyền hiệu quả của người dùng
   const userPermissions = await getUserPermissions(req.user.id);
+  console.log(userPermissions);
 
   // 6. Kiểm tra ủy quyền
   const hasRequiredPermission = userPermissions.includes(requiredPermission);

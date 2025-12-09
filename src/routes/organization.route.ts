@@ -2,14 +2,14 @@ import { Router } from "express";
 import { ValidationPipe } from "@/pipes/validation.pipe";
 import { authMiddleware } from "@/middlewares/auth.middleware";
 import { organizationController } from "@/controllers/organization.controller";
-import { dynamicRbacMiddleware } from "@/middlewares/rbac.middleware";
+import { rbacMiddleware } from "@/middlewares/rbac.middleware";
 
 const router = Router();
 
 router.get(
   "/organizations",
   authMiddleware,
-  dynamicRbacMiddleware,
+  rbacMiddleware,
   organizationController.getOrganizations
 );
 

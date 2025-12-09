@@ -2,11 +2,11 @@ import { Router } from "express";
 import { ValidationPipe } from "@/pipes/validation.pipe";
 import { authMiddleware } from "@/middlewares/auth.middleware";
 import { roleController } from "@/controllers/role.controller";
-import { dynamicRbacMiddleware } from "@/middlewares/rbac.middleware";
+import { rbacMiddleware } from "@/middlewares/rbac.middleware";
 
 const router = Router();
 
-router.get("/roles", authMiddleware, dynamicRbacMiddleware, roleController.getRoles);
+router.get("/roles", authMiddleware, rbacMiddleware, roleController.getRoles);
 
 router.post("/send-welcome", async (req, res) => {
   try {

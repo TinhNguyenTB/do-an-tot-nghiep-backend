@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { ValidationPipe } from "@/pipes/validation.pipe";
 import { authMiddleware } from "@/middlewares/auth.middleware";
-import { dynamicRbacMiddleware } from "@/middlewares/rbac.middleware";
+import { rbacMiddleware } from "@/middlewares/rbac.middleware";
 import { endpointPermissionController } from "@/controllers/endpoint-permission.controller";
 
 const router = Router();
@@ -9,7 +9,7 @@ const router = Router();
 router.get(
   "/endpoint-permissions",
   authMiddleware,
-  dynamicRbacMiddleware,
+  rbacMiddleware,
   endpointPermissionController.getEndpointPermissions
 );
 
