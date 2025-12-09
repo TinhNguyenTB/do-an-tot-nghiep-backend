@@ -28,9 +28,10 @@ const MOCK_ROLES = [
   {
     name: "super_admin",
     permissions: [
+      "manage_all_permissions",
       "manage_all_endpoint_permissions",
       "read_subscriptions_details",
-      "manage_system_roles", // Quản lý Role, Permission
+      "manage_all_roles",
       "manage_all_organizations", // Quản lý tất cả các tổ chức (CRUD)
       "manage_all_subscriptions", // Quản lý tất cả gói Subscription cơ bản
       "manage_all_users", // Quản lý/Khóa/Kích hoạt tất cả người dùng
@@ -258,10 +259,23 @@ async function main() {
     { httpMethod: "DELETE", endpoint: "/users/:id", permissionName: "manage_all_users" },
 
     // --- 3. ROLES ROUTES (QUẢN LÝ RBAC) ---
-    { httpMethod: "GET", endpoint: "/roles", permissionName: "manage_system_roles" },
-    { httpMethod: "POST", endpoint: "/roles", permissionName: "manage_system_roles" },
-    { httpMethod: "PATCH", endpoint: "/roles/:name", permissionName: "manage_system_roles" },
-    { httpMethod: "DELETE", endpoint: "/roles/:name", permissionName: "manage_system_roles" },
+    { httpMethod: "GET", endpoint: "/roles", permissionName: "manage_all_roles" },
+    { httpMethod: "POST", endpoint: "/roles", permissionName: "manage_all_roles" },
+    { httpMethod: "PATCH", endpoint: "/roles/:name", permissionName: "manage_all_roles" },
+    { httpMethod: "DELETE", endpoint: "/roles/:name", permissionName: "manage_all_roles" },
+
+    { httpMethod: "GET", endpoint: "/permissions", permissionName: "manage_all_permissions" },
+    { httpMethod: "POST", endpoint: "/permissions", permissionName: "manage_all_permissions" },
+    {
+      httpMethod: "PATCH",
+      endpoint: "/permissions/:name",
+      permissionName: "manage_all_permissions",
+    },
+    {
+      httpMethod: "DELETE",
+      endpoint: "/permissions/:name",
+      permissionName: "manage_all_permissions",
+    },
 
     // --- 4. ORGANIZATION ROUTES (QUẢN LÝ TỔ CHỨC) ---
     { httpMethod: "GET", endpoint: "/organizations", permissionName: "manage_all_organizations" },

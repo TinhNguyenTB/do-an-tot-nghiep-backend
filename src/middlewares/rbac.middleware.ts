@@ -53,7 +53,6 @@ export const rbacMiddleware = async (
 
   // 5. Lấy tất cả quyền hiệu quả của người dùng
   const userPermissions = await getUserPermissions(req.user.id);
-  console.log(userPermissions);
 
   // 6. Kiểm tra ủy quyền
   const hasRequiredPermission = userPermissions.includes(requiredPermission);
