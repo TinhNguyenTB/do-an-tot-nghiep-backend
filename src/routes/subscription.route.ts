@@ -3,38 +3,38 @@ import { ValidationPipe } from "@/pipes/validation.pipe";
 import { subscriptionController } from "@/controllers/subscription.controller";
 import { CreateSubscriptionDto } from "@/dtos/subscription.dto";
 import { authMiddleware } from "@/middlewares/auth.middleware";
-import { rbacMiddleware } from "@/middlewares/rbac.middleware";
+import { dynamicRbacMiddleware } from "@/middlewares/rbac.middleware";
 
 const router = Router();
 
-router.get("/", subscriptionController.getSubscriptions);
+router.get("/subscriptions", subscriptionController.getSubscriptions);
 
 router.get(
-  "/:id",
+  "/subscriptions/:id",
   authMiddleware,
-  rbacMiddleware.isValidPermission(["manage_all_subscriptions"]),
+  dynamicRbacMiddleware,
   subscriptionController.getSubscription
 );
 
 router.patch(
-  "/:id",
+  "/subscriptions/:id",
   authMiddleware,
-  rbacMiddleware.isValidPermission(["manage_all_subscriptions"]),
+  dynamicRbacMiddleware,
   subscriptionController.updateSubscription
 );
 
 router.post(
-  "/",
+  "/subscriptions",
   authMiddleware,
-  rbacMiddleware.isValidPermission(["manage_all_subscriptions"]),
+  dynamicRbacMiddleware,
   ValidationPipe(CreateSubscriptionDto),
   subscriptionController.createSubscription
 );
 
 router.delete(
-  "/:id",
+  "/subscriptions/:id",
   authMiddleware,
-  rbacMiddleware.isValidPermission(["manage_all_subscriptions"]),
+  dynamicRbacMiddleware,
   subscriptionController.deleteSubscription
 );
 

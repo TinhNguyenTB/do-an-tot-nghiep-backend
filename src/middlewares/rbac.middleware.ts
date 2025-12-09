@@ -1,55 +1,68 @@
 import { NextFunction, Response } from "express";
 import { StatusCodes } from "http-status-codes";
-import { getPermissionsFromRole } from "@/utils/rbacUtils";
+import { getUserPermissions } from "@/utils/rbacUtils";
 import { AuthenticatedRequest } from "@/middlewares/auth.middleware";
+import prisma from "@/prismaClient";
+import { logger } from "@/utils/logger";
 
-const isValidPermission =
-  (requiredPermissions: string[]) =>
-  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    try {
-      // Lấy role của user trong payload decoded của jwt
-      const userRoles = req.user && req.user.roles;
+/**
+ * Middleware kiểm tra quyền truy cập động dựa trên Route Path và HTTP Method
+ */
+export const dynamicRbacMiddleware = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  // 1. Kiểm tra xác thực
+  if (!req.user || !req.user.id) {
+    return res.status(StatusCodes.UNAUTHORIZED).json({ message: "Người dùng chưa được xác thực." });
+  }
 
-      // Kiểm tra role, user bắt buộc phải có ít nhất 1 role
-      if (!Array.isArray(userRoles) || userRoles.length === 0) {
-        return res.status(StatusCodes.FORBIDDEN).json({
-          message: "Forbidden: You're not allowed to access this API!",
-        });
-      }
+  // 2. Lấy Route Path: Đây là path trong file router (ví dụ: '/:id', '/')
+  // Cần đảm bảo rằng routePath này khớp với routePath trong DB (RoutePermission)
+  const routePath = req.route?.path;
+  const httpMethod = req.method;
 
-      // 1. Thu thập tất cả Permissions từ tất cả các Role của User (bao gồm kế thừa)
-      let userPermissions = new Set<string>();
+  if (!routePath) {
+    // Nếu không thể lấy routePath (thường không xảy ra), bỏ qua hoặc báo lỗi
+    return res
+      .status(StatusCodes.INTERNAL_SERVER_ERROR)
+      .json({ message: "Không xác định được đường dẫn API." });
+  }
 
-      // Sử dụng Map để theo dõi các Role đã được xử lý trên toàn bộ session để tránh đệ quy lặp
-      const globalProcessedRoles = new Set<string>();
+  // 3. Truy vấn DB để lấy Permission BẮT BUỘC cho endpoint này
+  const routePermission = await prisma.routePermission.findUnique({
+    where: {
+      httpMethod_routePath: {
+        httpMethod: httpMethod,
+        routePath: routePath,
+      },
+    },
+    select: { permissionName: true },
+  });
 
-      for (const roleName of userRoles) {
-        // Truyền processedRoles để tránh lỗi đệ quy vô hạn trong getPermissionsFromRole
-        const rolePermissions = await getPermissionsFromRole(roleName, globalProcessedRoles);
-        rolePermissions.forEach((p) => userPermissions.add(p));
-      }
+  // 4. Nếu endpoint KHÔNG được cấu hình trong DB
+  if (!routePermission) {
+    logger.warn(`[RBAC] Route ${httpMethod} ${routePath} không có cấu hình quyền`);
+    return res.status(StatusCodes.FORBIDDEN).json({
+      message: "Bạn không có quyền truy cập chức năng này.",
+    });
+  }
 
-      // console.log("userPermissions", userPermissions);
+  const requiredPermission = routePermission.permissionName;
 
-      // 2. Kiểm tra quyền yêu cầu (requiredPermissions)
+  // 5. Lấy tất cả quyền hiệu quả của người dùng
+  const userPermissions = await getUserPermissions(req.user.id);
 
-      const hasPermission = requiredPermissions?.every((item) => userPermissions.has(item));
+  // 6. Kiểm tra ủy quyền
+  const hasRequiredPermission = userPermissions.includes(requiredPermission);
 
-      if (!hasPermission) {
-        res.locals.message = "You're not allowed to access this API!";
-        return res.status(StatusCodes.FORBIDDEN).json();
-      }
-
-      // Nếu role và permissions hợp lệ thì cho phép đi tiếp sang controller
-      next();
-    } catch (error) {
-      console.error("Error from rbac middleware:", error);
-      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
-        message: "Something went wrong",
-      });
-    }
-  };
-
-export const rbacMiddleware = {
-  isValidPermission,
+  if (hasRequiredPermission) {
+    next(); // Cho phép tiếp tục
+  } else {
+    return res.status(StatusCodes.FORBIDDEN).json({
+      message: "Bạn không có quyền truy cập chức năng này.",
+      required: requiredPermission,
+    });
+  }
 };

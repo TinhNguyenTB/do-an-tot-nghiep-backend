@@ -1,7 +1,7 @@
 import nodemailer from "nodemailer";
 import path from "path";
 import fs from "fs";
-import handlebars from "handlebars"; // không phải nodemailer-express-handlebars
+import handlebars from "handlebars";
 
 const templatesPath = path.join(__dirname, "../templates");
 

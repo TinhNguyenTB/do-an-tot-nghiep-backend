@@ -6,6 +6,7 @@ const MOCK_ROLES = [
   {
     name: "client",
     permissions: [
+      "read_all_subscriptions",
       "read_self_subscription", // Quyền xem gói dịch vụ hiện tại của bản thân
       "update_self_profile", // Quyền cập nhật thông tin cá nhân
       "manage_subscription", // Quyền đăng ký, gia hạn gói dịch vụ (Tạo Payment)
@@ -27,6 +28,7 @@ const MOCK_ROLES = [
   {
     name: "super_admin",
     permissions: [
+      "read_subscriptions_details",
       "manage_system_roles", // Quản lý Role, Permission
       "manage_all_organizations", // Quản lý tất cả các tổ chức (CRUD)
       "manage_all_subscriptions", // Quản lý tất cả gói Subscription cơ bản
@@ -52,6 +54,7 @@ async function main() {
 
   // --- 2. Xóa dữ liệu cũ (Tùy chọn: cần thận trọng trong môi trường Production!) ---
   await prisma.userSubscription.deleteMany({});
+  await prisma.routePermission.deleteMany({});
   await prisma.payment.deleteMany({});
   await prisma.userRole.deleteMany({});
   await prisma.roleInheritance.deleteMany({});
@@ -220,6 +223,66 @@ async function main() {
     const orgStatus = organizationId ? `(Org ID: ${organizationId})` : `(Không có Org)`;
     console.log(`Đã tạo User: ${user.email} với role '${userData.role}' ${orgStatus}.`);
   }
+
+  console.log("Bắt đầu Seed Route Permissions...");
+
+  const routePermissionsData = [
+    // --- 1. SUBSCRIPTIONS ROUTES (QUẢN LÝ GÓI) ---
+    {
+      httpMethod: "GET",
+      routePath: "/subscriptions",
+      permissionName: "read_all_subscriptions",
+    },
+    {
+      httpMethod: "GET",
+      routePath: "/subscriptions/:id",
+      permissionName: "read_subscriptions_details",
+    },
+    {
+      httpMethod: "PATCH",
+      routePath: "/subscriptions/:id",
+      permissionName: "manage_all_subscriptions",
+    },
+    { httpMethod: "POST", routePath: "/subscriptions", permissionName: "manage_all_subscriptions" },
+    {
+      httpMethod: "DELETE",
+      routePath: "/subscriptions/:id",
+      permissionName: "manage_all_subscriptions",
+    },
+
+    // --- 2. USERS ROUTES (QUẢN LÝ TẤT CẢ USER) ---
+    { httpMethod: "GET", routePath: "/users", permissionName: "manage_all_users" },
+    { httpMethod: "GET", routePath: "/users/:id", permissionName: "manage_all_users" },
+    { httpMethod: "PATCH", routePath: "/users/:id", permissionName: "manage_all_users" },
+    { httpMethod: "DELETE", routePath: "/users/:id", permissionName: "manage_all_users" },
+
+    // --- 3. ROLES ROUTES (QUẢN LÝ RBAC) ---
+    { httpMethod: "GET", routePath: "/roles", permissionName: "manage_system_roles" },
+    { httpMethod: "POST", routePath: "/roles", permissionName: "manage_system_roles" },
+    { httpMethod: "PATCH", routePath: "/roles/:name", permissionName: "manage_system_roles" },
+    { httpMethod: "DELETE", routePath: "/roles/:name", permissionName: "manage_system_roles" },
+
+    // --- 4. ORGANIZATION ROUTES (QUẢN LÝ TỔ CHỨC) ---
+    { httpMethod: "GET", routePath: "/organizations", permissionName: "manage_all_organizations" },
+    {
+      httpMethod: "GET",
+      routePath: "/organizations/:id",
+      permissionName: "read_organization_details",
+    },
+    {
+      httpMethod: "PATCH",
+      routePath: "/organizations/:id",
+      permissionName: "update_organization_details",
+    },
+    { httpMethod: "POST", routePath: "/organizations", permissionName: "manage_all_organizations" },
+  ];
+
+  await prisma.routePermission.createMany({
+    data: routePermissionsData,
+    skipDuplicates: true,
+  });
+  console.log(`Đã tạo ${routePermissionsData.length} Route Permissions.`);
+
   console.log(`Seed hoàn tất. 🔑 Mật khẩu chung cho tất cả user là: "${plainPassword}"`);
 }
 

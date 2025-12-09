@@ -6,9 +6,9 @@ import { LoginDto } from "@/dtos/login.dto";
 
 const router = Router();
 
-router.post("/register", ValidationPipe(RegisterUserDto), userController.registerUser);
-router.post("/login", ValidationPipe(LoginDto), userController.login);
-router.delete("/logout", userController.logout);
-router.put("/refresh", userController.refreshToken);
+router.post("/auth/register", ValidationPipe(RegisterUserDto), userController.registerUser);
+router.post("/auth/login", ValidationPipe(LoginDto), userController.login);
+router.delete("/auth/logout", userController.logout);
+router.put("/auth/refresh", userController.refreshToken);
 
 export const authRoute = router;

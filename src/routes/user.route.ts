@@ -3,38 +3,18 @@ import { userController } from "@/controllers/user.controller";
 import { ValidationPipe } from "@/pipes/validation.pipe";
 import { RePaymentDto } from "@/dtos/re-payment.dto";
 import { authMiddleware } from "@/middlewares/auth.middleware";
-import { rbacMiddleware } from "@/middlewares/rbac.middleware";
+import { dynamicRbacMiddleware } from "@/middlewares/rbac.middleware";
 
 const router = Router();
 
-router.get(
-  "/",
-  authMiddleware,
-  rbacMiddleware.isValidPermission(["manage_all_users"]),
-  userController.getUsers
-);
+router.get("/users", authMiddleware, dynamicRbacMiddleware, userController.getUsers);
 
-router.post(
-  "/",
-  authMiddleware,
-  rbacMiddleware.isValidPermission(["manage_all_users"]),
-  userController.createUser
-);
+router.post("/users", authMiddleware, dynamicRbacMiddleware, userController.createUser);
 
-router.get(
-  "/:id",
-  authMiddleware,
-  rbacMiddleware.isValidPermission(["manage_all_users"]),
-  userController.getUserDetails
-);
+router.get("/users/:id", authMiddleware, dynamicRbacMiddleware, userController.getUserDetails);
 
-router.patch(
-  "/:id",
-  authMiddleware,
-  rbacMiddleware.isValidPermission(["manage_all_users"]),
-  userController.updateUser
-);
+router.patch("/users/:id", authMiddleware, dynamicRbacMiddleware, userController.updateUser);
 
-router.post("/re-payment", ValidationPipe(RePaymentDto), userController.rePayment);
+router.post("/users/re-payment", ValidationPipe(RePaymentDto), userController.rePayment);
 
 export const userRoute = router;

@@ -1,36 +1,33 @@
 import { Router } from "express";
 import { ValidationPipe } from "@/pipes/validation.pipe";
 import { authMiddleware } from "@/middlewares/auth.middleware";
-import { rbacMiddleware } from "@/middlewares/rbac.middleware";
 import { organizationController } from "@/controllers/organization.controller";
+import { dynamicRbacMiddleware } from "@/middlewares/rbac.middleware";
 
 const router = Router();
 
 router.get(
-  "/",
+  "/organizations",
   authMiddleware,
-  rbacMiddleware.isValidPermission(["manage_all_organizations"]),
+  dynamicRbacMiddleware,
   organizationController.getOrganizations
 );
 
 // router.get(
 //   "/:id",
 //   authMiddleware,
-//   rbacMiddleware.isValidPermission(["manage_system_roles"]),
 //   roleController.getSubscription
 // );
 
 // router.patch(
 //   "/:id",
 //   authMiddleware,
-//   rbacMiddleware.isValidPermission(["manage_system_roles"]),
 //   roleController.updateSubscription
 // );
 
 // router.post(
 //   "/",
 //   authMiddleware,
-//   rbacMiddleware.isValidPermission(["manage_system_roles"]),
 //   ValidationPipe(CreateSubscriptionDto),
 //   roleController.createSubscription
 // );
@@ -38,7 +35,6 @@ router.get(
 // router.delete(
 //   "/:id",
 //   authMiddleware,
-//   rbacMiddleware.isValidPermission(["manage_system_roles"]),
 //   roleController.deleteSubscription
 // );
 

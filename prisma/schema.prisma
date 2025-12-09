@@ -36,24 +36,24 @@ enum SubscriptionStatus {
 //
 
 model Organization {
-  id          Int       @id @default(autoincrement()) 
-  name        String    @db.VarChar(255)
-  description String?   @db.Text
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  
+  id          Int      @id @default(autoincrement())
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
   users User[]
 }
 
 model Role {
-  name          String  @id @db.VarChar(100) // PRIMARY KEY
-  description   String? @db.Text
+  name        String  @id @db.VarChar(100) // PRIMARY KEY
+  description String? @db.Text
 
- createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
   // Many-to-Many
-  users         UserRole[]
-  permissions   RolePermission[]
+  users       UserRole[]
+  permissions RolePermission[]
 
   // Hierarchical RBAC - Role Inheritance
   inheritsFrom RoleInheritance[] @relation("InheritsFrom")
@@ -61,24 +61,25 @@ model Role {
 }
 
 model Permission {
-  name          String  @id @db.VarChar(100) // PRIMARY KEY
-  description   String? @db.Text
+  name        String            @id @db.VarChar(100) // PRIMARY KEY
+  description String?           @db.Text
+  routes      RoutePermission[] // Một Permission có thể được dùng cho nhiều RoutePermission
 
-   createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   roles RolePermission[]
 }
 
 model RolePermission {
-  roleName         String @map("role_name")
-  permissionName   String @map("permission_name")
+  roleName       String @map("role_name")
+  permissionName String @map("permission_name")
 
   role       Role       @relation(fields: [roleName], references: [name])
   permission Permission @relation(fields: [permissionName], references: [name])
 
-   createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@id([roleName, permissionName])
   @@map("role_permissions")
@@ -87,28 +88,28 @@ model RolePermission {
 // ✨ MODEL MỚI CHO ROLE INHERITANCE
 model RoleInheritance {
   parentId String @map("parent_role_name") // Role cha (được kế thừa)
-  childId  String @map("child_role_name")  // Role con (kế thừa)
+  childId  String @map("child_role_name") // Role con (kế thừa)
 
   parent Role @relation("InheritedBy", fields: [parentId], references: [name])
   child  Role @relation("InheritsFrom", fields: [childId], references: [name])
 
-   createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@id([parentId, childId])
   @@map("role_inheritance")
 }
 
 model User {
-  id             Int        @id @default(autoincrement()) 
-  organizationId Int?       @map("organization_id") 
-  email          String     @unique @db.VarChar(255)
-  password       String     @db.VarChar(255)
-  name           String?    @db.VarChar(255)
+  id             Int     @id @default(autoincrement())
+  organizationId Int?    @map("organization_id")
+  email          String  @unique @db.VarChar(255)
+  password       String  @db.VarChar(255)
+  name           String? @db.VarChar(255)
 
-  status         UserStatus
-  createdAt      DateTime   @default(now()) @map("created_at")
-  updatedAt      DateTime   @updatedAt @map("updated_at")
+  status    UserStatus
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
 
   roles             UserRole[]
   organization      Organization?      @relation(fields: [organizationId], references: [id])
@@ -117,53 +118,52 @@ model User {
 }
 
 model UserRole {
-  userId   Int    @map("user_id") 
+  userId   Int    @map("user_id")
   roleName String @map("role_name")
 
   user User @relation(fields: [userId], references: [id])
   role Role @relation(fields: [roleName], references: [name])
 
-   createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@id([userId, roleName])
   @@map("user_roles")
 }
 
-
 model Subscription {
-  id        Int     @id @default(autoincrement()) 
-  name      String  @db.VarChar(100)  @unique
-  duration  Int 
-  price     Decimal @db.Decimal(12, 2)
-  userLimit Int?    @map("user_limit")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(100)
+  duration  Int
+  price     Decimal  @db.Decimal(12, 2)
+  userLimit Int?     @map("user_limit")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  payments   Payment[]
-  userSubs   UserSubscription[]
+  payments Payment[]
+  userSubs UserSubscription[]
 }
 
 model Payment {
-  id             Int             @id @default(autoincrement()) 
-  userId         Int             @map("user_id") 
-  subscriptionId Int?            @map("subscription_id") 
-  amount         Decimal         @db.Decimal(12, 2)
-  paymentType    PaymentType     @map("payment_type")
-  paymentDate    DateTime        @default(now()) @map("payment_date")
-  status         PaymentStatus   @default(PENDING)
-  transactionId  String?         @db.VarChar(255)
+  id             Int           @id @default(autoincrement())
+  userId         Int           @map("user_id")
+  subscriptionId Int?          @map("subscription_id")
+  amount         Decimal       @db.Decimal(12, 2)
+  paymentType    PaymentType   @map("payment_type")
+  paymentDate    DateTime      @default(now()) @map("payment_date")
+  status         PaymentStatus @default(PENDING)
+  transactionId  String?       @db.VarChar(255)
 
-  user           User            @relation(fields: [userId], references: [id])
-  subscription   Subscription?   @relation(fields: [subscriptionId], references: [id])
-  userSubs       UserSubscription[]
+  user         User               @relation(fields: [userId], references: [id])
+  subscription Subscription?      @relation(fields: [subscriptionId], references: [id])
+  userSubs     UserSubscription[]
 }
 
 model UserSubscription {
-  id             Int                @id @default(autoincrement()) 
-  userId         Int                @map("user_id") 
-  subscriptionId Int                @map("subscription_id") 
-  paymentId      Int?               @map("payment_id") 
+  id             Int                @id @default(autoincrement())
+  userId         Int                @map("user_id")
+  subscriptionId Int                @map("subscription_id")
+  paymentId      Int?               @map("payment_id")
   startDate      DateTime           @map("start_date")
   endDate        DateTime           @map("end_date")
   status         SubscriptionStatus @default(ACTIVE)
@@ -175,9 +175,25 @@ model UserSubscription {
 }
 
 model StripeCustomer {
-  id               Int @id @default(autoincrement()) 
-  customerId       Int @unique
+  id               Int    @id @default(autoincrement())
+  customerId       Int    @unique
   stripeCustomerId String @unique
 
-  createdAt DateTime  @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
+}
+
+model RoutePermission {
+  id             Int    @id @default(autoincrement())
+  httpMethod     String @map("http_method") @db.VarChar(10) // GET, POST, PATCH, DELETE
+  routePath      String @map("route_path") @db.VarChar(255) // Ví dụ: /subscriptions/:id
+  permissionName String @map("permission_name")
+
+  permission Permission @relation(fields: [permissionName], references: [name])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Đảm bảo không có hai bản ghi RoutePermission giống nhau (Method + Path)
+  @@unique([httpMethod, routePath])
+  @@map("route_permissions_mapping")
 }

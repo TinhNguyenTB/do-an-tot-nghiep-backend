@@ -1,54 +1,63 @@
 import prisma from "@/prismaClient";
 
 /**
- * Lấy tất cả permissions của một role, bao gồm cả quyền được kế thừa (Sử dụng đệ quy).
- *
- * @param roleName Tên của role cần kiểm tra.
- * @param processedRoles Set các role đã xử lý để tránh đệ quy vô hạn (Vòng lặp thừa kế).
- * @returns Mảng các permission.
+ * Lấy tất cả các quyền (permissions) mà một role có, bao gồm quyền từ role cha (parent).
+ * @param roleName Tên vai trò (role name).
+ * @returns Mảng các chuỗi tên quyền.
  */
-export async function getPermissionsFromRole(
+async function getEffectivePermissionsForRole(
   roleName: string,
-  processedRoles: Set<string> = new Set()
+  checkedRoles: Set<string> = new Set()
 ): Promise<string[]> {
-  // Tránh vòng lặp thừa kế
-  if (processedRoles.has(roleName)) {
-    return [];
+  if (checkedRoles.has(roleName)) {
+    return []; // Ngăn chặn vòng lặp vô hạn
   }
-  processedRoles.add(roleName);
+  checkedRoles.add(roleName);
 
-  // 1. Lấy Role, Permissions trực tiếp và Role Cha (Parent) được kế thừa
-  const role = await prisma.role.findUnique({
-    where: { name: roleName },
-    include: {
-      permissions: {
-        select: { permission: { select: { name: true } } },
-      },
-      // Quan hệ: inheritedBy (role con) -> inheritsFrom (role cha)
-      // Tìm các Role mà Role hiện tại (childId) kế thừa từ (parentId)
-      inheritsFrom: {
-        select: { parentId: true },
-      },
-    },
+  // 1. Lấy quyền trực tiếp
+  const directPermissions = await prisma.rolePermission.findMany({
+    where: { roleName: roleName },
+    select: { permissionName: true },
+  });
+  const directPerms = directPermissions.map((p) => p.permissionName);
+
+  // 2. Lấy role cha (kế thừa)
+  const inheritedRoles = await prisma.roleInheritance.findMany({
+    where: { childId: roleName },
+    select: { parentId: true },
   });
 
-  if (!role) {
-    return [];
+  let inheritedPerms: string[] = [];
+  for (const inheritedRole of inheritedRoles) {
+    // Đệ quy để lấy quyền của role cha
+    const parentPerms = await getEffectivePermissionsForRole(inheritedRole.parentId, checkedRoles);
+    inheritedPerms = inheritedPerms.concat(parentPerms);
   }
 
-  let permissions = new Set<string>();
+  // 3. Kết hợp và loại bỏ trùng lặp
+  const allPerms = [...directPerms, ...inheritedPerms];
+  return Array.from(new Set(allPerms));
+}
 
-  // 2. Thêm Permissions trực tiếp
-  role.permissions.forEach((rp) => permissions.add(rp.permission.name));
+/**
+ * Lấy tất cả quyền mà một người dùng có.
+ * @param userId ID của người dùng.
+ * @returns Mảng các chuỗi tên quyền hiệu quả của người dùng.
+ */
+export async function getUserPermissions(userId: number): Promise<string[]> {
+  // 1. Lấy tất cả các Role của người dùng
+  const userRoles = await prisma.userRole.findMany({
+    where: { userId: userId },
+    select: { roleName: true },
+  });
 
-  // 3. Xử lý quyền kế thừa (Đệ quy)
-  const inheritedRoles = role.inheritsFrom.map((inheritance) => inheritance.parentId);
-
-  for (const inheritedRoleName of inheritedRoles) {
-    // Đệ quy để lấy tất cả quyền từ role cha
-    const inheritedPermissions = await getPermissionsFromRole(inheritedRoleName, processedRoles);
-    inheritedPermissions.forEach((p) => permissions.add(p));
+  let effectivePermissions: string[] = [];
+  for (const userRole of userRoles) {
+    // 2. Lấy quyền hiệu quả cho từng role
+    const rolePerms = await getEffectivePermissionsForRole(userRole.roleName);
+    effectivePermissions = effectivePermissions.concat(rolePerms);
   }
 
-  return Array.from(permissions);
+  // 3. Loại bỏ trùng lặp cuối cùng
+  return Array.from(new Set(effectivePermissions));
 }

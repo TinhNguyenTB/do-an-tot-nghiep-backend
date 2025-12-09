@@ -52,7 +52,7 @@ const getRoles = wrapAsync(async (req: Request, res: Response) => {
 // });
 
 const sendWelcomeMail = async (to: string, context: any) => {
-  const html = renderTemplate("emails/welcome", context);
+  const html = renderTemplate("welcome", context);
 
   await transporter.sendMail({
     from: process.env.EMAIL_USER,
