@@ -11,6 +11,7 @@ import { ROLES } from "@/constants/role.constants";
 import { LoginDto } from "@/dtos/login.dto";
 import { generateToken } from "@/utils/jwtProvider";
 import { RePaymentDto } from "@/dtos/re-payment.dto";
+import { getUserPermissions } from "@/utils/rbacUtils";
 
 export async function createUser(dto: CreateUserDto, defaultPassword: string) {
   const existingUser = await prisma.user.findUnique({ where: { email: dto.email } });
@@ -414,6 +415,7 @@ export async function handleLogin(dto: LoginDto) {
 
   // 5. Trường hợp nhập đúng thông tin tài khoản, tạo token và trả về cho phía Client
   const roleNames = user.roles.map((r) => r.roleName);
+  const permissions = await getUserPermissions(user.id);
   const userInfo = {
     id: user.id,
     email: user.email,
@@ -426,7 +428,7 @@ export async function handleLogin(dto: LoginDto) {
   const refreshToken = generateToken(userInfo, process.env.REFRESH_TOKEN_SECRET!, "14d");
 
   return {
-    userInfo,
+    userInfo: { ...userInfo, permissions },
     accessToken,
     refreshToken,
   };

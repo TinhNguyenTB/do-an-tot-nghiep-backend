@@ -4,6 +4,7 @@ import { getUserPermissions } from "@/utils/rbacUtils";
 import { AuthenticatedRequest } from "@/middlewares/auth.middleware";
 import prisma from "@/prismaClient";
 import { logger } from "@/utils/logger";
+import { ROLES } from "@/constants/role.constants";
 
 /**
  * Middleware kiểm tra quyền truy cập động dựa trên Route Path và HTTP Method
@@ -28,6 +29,11 @@ export const rbacMiddleware = async (
     return res
       .status(StatusCodes.INTERNAL_SERVER_ERROR)
       .json({ message: "Không xác định được đường dẫn API." });
+  }
+
+  // Cho phép tiếp tục nếu là Super Admin
+  if (req.user.roles.includes(ROLES.SUPER_ADMIN)) {
+    return next();
   }
 
   // 3. Truy vấn DB để lấy Permission BẮT BUỘC cho endpoint này

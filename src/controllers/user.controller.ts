@@ -37,7 +37,7 @@ const login = wrapAsync(async (req: Request, res: Response) => {
     httpOnly: true,
     secure: true,
     sameSite: "none",
-    maxAge: ms("1d"),
+    maxAge: ms("14 days"),
   });
 
   res.cookie("refreshToken", result.refreshToken, {
@@ -89,7 +89,7 @@ const refreshToken = wrapAsync(async (req: Request, res: Response) => {
     httpOnly: true,
     secure: true,
     sameSite: "none",
-    maxAge: ms("1d"),
+    maxAge: ms("14 days"),
   });
 
   res.locals.message = "Refresh token thành công";

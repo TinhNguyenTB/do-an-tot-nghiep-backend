@@ -2,15 +2,53 @@ import * as bcrypt from "bcrypt";
 import prisma from "../src/prismaClient";
 import { UserStatus } from "@prisma/client";
 
+const SYSTEM_PERMISSIONS = [
+  // SUBSCRIPTIONS
+  "read_subscriptions",
+  "read_subscriptions_details",
+  "update_subscriptions",
+  "create_subscriptions",
+  "delete_subscriptions",
+  // USERS
+  "read_users",
+  "create_users",
+  "read_users_details",
+  "update_users",
+  "delete_users",
+  // ROLES
+  "read_roles",
+  "read_roles_details",
+  "create_roles",
+  "update_roles",
+  "delete_roles",
+  // PERMISSIONS (Tự quản lý)
+  "read_permissions",
+  "read_permissions_details",
+  "create_permissions",
+  "update_permissions",
+  "delete_permissions",
+  // ORGANIZATIONS
+  "read_organizations",
+  "read_organization_details",
+  "update_organizations",
+  "create_organizations",
+  "delete_organizations",
+  // ENDPOINT-PERMISSION
+  "read_endpoint_permissions",
+  "read_endpoint_permissions_details",
+  "create_endpoint_permissions",
+  "update_endpoint_permissions",
+  "delete_endpoint_permissions",
+];
+
 const MOCK_ROLES = [
   {
     name: "client",
     permissions: [
-      "read_all_subscriptions",
+      "read_subscriptions",
       "read_self_subscription", // Quyền xem gói dịch vụ hiện tại của bản thân
       "update_self_profile", // Quyền cập nhật thông tin cá nhân
-      "manage_subscription", // Quyền đăng ký, gia hạn gói dịch vụ (Tạo Payment)
-      "read_payments", // Xem lịch sử thanh toán
+      "read_self_payments", // Xem lịch sử thanh toán
     ],
     inherits: [],
   },
@@ -20,31 +58,27 @@ const MOCK_ROLES = [
       "manage_organization_users", // Quản lý người dùng trong Org
 
       // Quản lý Tổ chức và Thanh toán
-      "read_organization_details", // Xem thông tin chi tiết Tổ chức
-      "update_organization_details", // Cập nhật thông tin Tổ chức
+      "read_self_organization", // Xem thông tin chi tiết Tổ chức
+      "update_self_organization", // Cập nhật thông tin Tổ chức
     ],
     inherits: ["client"], // Kế thừa các quyền cơ bản của client
   },
   {
     name: "super_admin",
-    permissions: [
-      "manage_all_permissions",
-      "manage_all_endpoint_permissions",
-      "read_subscriptions_details",
-      "manage_all_roles",
-      "manage_all_organizations", // Quản lý tất cả các tổ chức (CRUD)
-      "manage_all_subscriptions", // Quản lý tất cả gói Subscription cơ bản
-      "manage_all_users", // Quản lý/Khóa/Kích hoạt tất cả người dùng
-    ],
-    inherits: ["client", "org_admin"], // Kế thừa tất cả quyền tổ chức và quyền cơ bản
+    permissions: [],
+    inherits: [],
   },
 ];
 
 async function main() {
   console.log(`Bắt đầu Seed...`);
 
-  // --- 1. Lấy danh sách tất cả các Permissions DUY NHẤT ---
   const allPermissions = new Set<string>();
+
+  // ✨ FIX: Đảm bảo các quyền chung (SYSTEM_PERMISSIONS) được thêm vào
+  SYSTEM_PERMISSIONS.forEach((perm) => allPermissions.add(perm));
+
+  // --- 1. Lấy danh sách tất cả các Permissions DUY NHẤT ---
   MOCK_ROLES.forEach((role) => {
     role.permissions.forEach((perm) => allPermissions.add(perm));
   });
@@ -194,7 +228,7 @@ async function main() {
 
   // --- TẠO 3 USERS MẪU ---
   const usersToCreate = [
-    { email: "superadmin@gmail.com", role: "super_admin", name: "System Admin" },
+    { email: "superadmin@gmail.com", role: "super_admin", name: "Super Admin" },
     { email: "orgadmin@gmail.com", role: "org_admin", name: "Org Admin" },
     { email: "client@gmail.com", role: "client", name: "Client" },
   ];
@@ -233,7 +267,7 @@ async function main() {
     {
       httpMethod: "GET",
       endpoint: "/subscriptions",
-      permissionName: "read_all_subscriptions",
+      permissionName: "read_subscriptions",
     },
     {
       httpMethod: "GET",
@@ -243,42 +277,49 @@ async function main() {
     {
       httpMethod: "PATCH",
       endpoint: "/subscriptions/:id",
-      permissionName: "manage_all_subscriptions",
+      permissionName: "update_subscriptions",
     },
-    { httpMethod: "POST", endpoint: "/subscriptions", permissionName: "manage_all_subscriptions" },
+    { httpMethod: "POST", endpoint: "/subscriptions", permissionName: "create_subscriptions" },
     {
       httpMethod: "DELETE",
       endpoint: "/subscriptions/:id",
-      permissionName: "manage_all_subscriptions",
+      permissionName: "delete_subscriptions",
     },
 
     // --- 2. USERS ROUTES (QUẢN LÝ TẤT CẢ USER) ---
-    { httpMethod: "GET", endpoint: "/users", permissionName: "manage_all_users" },
-    { httpMethod: "GET", endpoint: "/users/:id", permissionName: "manage_all_users" },
-    { httpMethod: "PATCH", endpoint: "/users/:id", permissionName: "manage_all_users" },
-    { httpMethod: "DELETE", endpoint: "/users/:id", permissionName: "manage_all_users" },
+    { httpMethod: "GET", endpoint: "/users", permissionName: "read_users" },
+    { httpMethod: "POST", endpoint: "/users", permissionName: "create_users" },
+    { httpMethod: "GET", endpoint: "/users/:id", permissionName: "read_users_details" },
+    { httpMethod: "PATCH", endpoint: "/users/:id", permissionName: "update_users" },
+    { httpMethod: "DELETE", endpoint: "/users/:id", permissionName: "delete_users" },
 
     // --- 3. ROLES ROUTES (QUẢN LÝ RBAC) ---
-    { httpMethod: "GET", endpoint: "/roles", permissionName: "manage_all_roles" },
-    { httpMethod: "POST", endpoint: "/roles", permissionName: "manage_all_roles" },
-    { httpMethod: "PATCH", endpoint: "/roles/:name", permissionName: "manage_all_roles" },
-    { httpMethod: "DELETE", endpoint: "/roles/:name", permissionName: "manage_all_roles" },
+    { httpMethod: "GET", endpoint: "/roles", permissionName: "read_roles" },
+    { httpMethod: "GET", endpoint: "/roles/:name", permissionName: "read_roles_details" },
+    { httpMethod: "POST", endpoint: "/roles", permissionName: "create_roles" },
+    { httpMethod: "PATCH", endpoint: "/roles/:name", permissionName: "update_roles" },
+    { httpMethod: "DELETE", endpoint: "/roles/:name", permissionName: "delete_roles" },
 
-    { httpMethod: "GET", endpoint: "/permissions", permissionName: "manage_all_permissions" },
-    { httpMethod: "POST", endpoint: "/permissions", permissionName: "manage_all_permissions" },
+    { httpMethod: "GET", endpoint: "/permissions", permissionName: "read_permissions" },
+    { httpMethod: "POST", endpoint: "/permissions", permissionName: "create_permissions" },
+    {
+      httpMethod: "GET",
+      endpoint: "/permissions/:name",
+      permissionName: "read_permissions_details",
+    },
     {
       httpMethod: "PATCH",
       endpoint: "/permissions/:name",
-      permissionName: "manage_all_permissions",
+      permissionName: "update_permissions",
     },
     {
       httpMethod: "DELETE",
       endpoint: "/permissions/:name",
-      permissionName: "manage_all_permissions",
+      permissionName: "delete_permissions",
     },
 
     // --- 4. ORGANIZATION ROUTES (QUẢN LÝ TỔ CHỨC) ---
-    { httpMethod: "GET", endpoint: "/organizations", permissionName: "manage_all_organizations" },
+    { httpMethod: "GET", endpoint: "/organizations", permissionName: "read_organizations" },
     {
       httpMethod: "GET",
       endpoint: "/organizations/:id",
@@ -287,35 +328,40 @@ async function main() {
     {
       httpMethod: "PATCH",
       endpoint: "/organizations/:id",
-      permissionName: "update_organization_details",
+      permissionName: "update_organizations",
     },
-    { httpMethod: "POST", endpoint: "/organizations", permissionName: "manage_all_organizations" },
+    { httpMethod: "POST", endpoint: "/organizations", permissionName: "create_organizations" },
+    {
+      httpMethod: "DELETE",
+      endpoint: "/organizations/:id",
+      permissionName: "delete_organizations",
+    },
 
-    // --- 5. ROUTE-PERMISSION ROUTES ---
+    // --- 5. ENDPOINT-PERMISSION ROUTES ---
     {
       httpMethod: "GET",
       endpoint: "/endpoint-permissions",
-      permissionName: "manage_all_endpoint_permissions",
+      permissionName: "read_endpoint_permissions",
     },
     {
       httpMethod: "GET",
       endpoint: "/endpoint-permissions/:id",
-      permissionName: "manage_all_endpoint_permissions",
+      permissionName: "read_endpoint_permissions_details",
     },
     {
       httpMethod: "POST",
       endpoint: "/endpoint-permissions",
-      permissionName: "manage_all_endpoint_permissions",
+      permissionName: "create_endpoint_permissions",
     },
     {
       httpMethod: "PATCH",
       endpoint: "/endpoint-permissions/:id",
-      permissionName: "manage_all_endpoint_permissions",
+      permissionName: "update_endpoint_permissions",
     },
     {
       httpMethod: "DELETE",
       endpoint: "/endpoint-permissions/:id",
-      permissionName: "manage_all_endpoint_permissions",
+      permissionName: "delete_endpoint_permissions",
     },
   ];
 
