@@ -72,24 +72,13 @@ export async function register(dto: RegisterUserDto) {
   // 3. Băm (Hash) mật khẩu
   const hashedPassword = await bcrypt.hash(dto.password, 10);
 
-  let newOrganizationId: number | undefined = undefined;
-
-  // Xử lý tạo tổ chức nếu có
-  if (dto.organizationName) {
-    const organization = await prisma.organization.create({
-      data: { name: dto.organizationName },
-    });
-    newOrganizationId = organization.id;
-  }
-
   const [newUser, newPayment] = await prisma.$transaction(async (tx) => {
     // BƯỚC 4A: Tạo User với trạng thái PENDING
     const user = await tx.user.create({
       data: {
-        organizationId: newOrganizationId,
         email: dto.email,
         password: hashedPassword,
-        name: dto.name || "Người dùng mới",
+        name: dto.name,
         status: UserStatus.PENDING,
         // ✨ Gán role mặc định cho user đăng ký mới
         roles: {
@@ -99,6 +88,24 @@ export async function register(dto: RegisterUserDto) {
         },
       },
     });
+
+    // --- 2. Nếu đăng ký tổ chức → tạo ORGANIZATION + gán OWNER ---
+    if (dto.organizationName) {
+      const organization = await tx.organization.create({
+        data: {
+          name: dto.organizationName,
+          ownerId: user.id, // ✅ USER LÀ OWNER
+        },
+      });
+
+      // --- 3. Gán user vào organization ---
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          organizationId: organization.id,
+        },
+      });
+    }
 
     // BƯỚC 4B: Tạo bản ghi Payment với userId đã có
     const payment = await tx.payment.create({
@@ -421,6 +428,7 @@ export async function handleLogin(dto: LoginDto) {
     email: user.email,
     name: user.name,
     roles: roleNames,
+    permissions,
     organizationId: user.organizationId,
   };
 
@@ -428,7 +436,7 @@ export async function handleLogin(dto: LoginDto) {
   const refreshToken = generateToken(userInfo, process.env.REFRESH_TOKEN_SECRET!, "14d");
 
   return {
-    userInfo: { ...userInfo, permissions },
+    userInfo,
     accessToken,
     refreshToken,
   };

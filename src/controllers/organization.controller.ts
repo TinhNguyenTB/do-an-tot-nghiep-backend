@@ -4,7 +4,6 @@ import { wrapAsync } from "@/utils/wrapAsync";
 import { StatusCodes } from "http-status-codes";
 import * as organizationService from "@/services/organization.service";
 
-// --- READ ALL (Có Pagination, Sort và Filters) ---
 const getOrganizations = wrapAsync(async (req: Request, res: Response) => {
   logger.info("Fetching all organizations with query params...");
 

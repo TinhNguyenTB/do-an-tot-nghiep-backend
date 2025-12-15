@@ -38,10 +38,12 @@ enum SubscriptionStatus {
 model Organization {
   id          Int      @id @default(autoincrement())
   name        String   @db.VarChar(255)
+  ownerId     Int      @map("owner_id") 
   description String?  @db.Text
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+owner User @relation("OrganizationOwner", fields: [ownerId], references: [id])
   users User[]
 }
 
@@ -113,6 +115,7 @@ model User {
 
   roles             UserRole[]
   organization      Organization?      @relation(fields: [organizationId], references: [id])
+  ownedOrganizations Organization[] @relation("OrganizationOwner")
   payments          Payment[]
   userSubscriptions UserSubscription[]
 }

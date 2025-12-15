@@ -217,48 +217,76 @@ async function main() {
   const plainPassword = "password"; // Mật khẩu chung cho cả 3 user
   const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
-  // Tạo Tổ chức mẫu
+  const superAdmin = await prisma.user.create({
+    data: {
+      email: "superadmin@gmail.com",
+      password: hashedPassword,
+      name: "Super Admin",
+      status: UserStatus.ACTIVE,
+    },
+  });
+
+  await prisma.userRole.create({
+    data: {
+      userId: superAdmin.id,
+      roleName: "super_admin",
+    },
+  });
+
+  console.log(`Đã tạo Super Admin: ${superAdmin.email}`);
+
+  const orgAdmin = await prisma.user.create({
+    data: {
+      email: "orgadmin@gmail.com",
+      password: hashedPassword,
+      name: "Org Admin",
+      status: UserStatus.ACTIVE,
+    },
+  });
+
+  await prisma.userRole.create({
+    data: {
+      userId: orgAdmin.id,
+      roleName: "org_admin",
+    },
+  });
+
+  console.log(`Đã tạo Org Admin: ${orgAdmin.email}`);
+
   const org = await prisma.organization.create({
     data: {
       name: "Acme Corporation",
       description: "Tổ chức mẫu",
+      ownerId: orgAdmin.id,
     },
   });
-  console.log(`Đã tạo Tổ chức mẫu: ${org.name}.`);
 
-  // --- TẠO 3 USERS MẪU ---
-  const usersToCreate = [
-    { email: "superadmin@gmail.com", role: "super_admin", name: "Super Admin" },
-    { email: "orgadmin@gmail.com", role: "org_admin", name: "Org Admin" },
-    { email: "client@gmail.com", role: "client", name: "Client" },
-  ];
+  console.log(`Đã tạo Organization: ${org.name} (Owner: ${orgAdmin.email})`);
 
-  for (const userData of usersToCreate) {
-    // ✨ LOGIC ĐIỀU CHỈNH: Chỉ gán organizationId nếu role là 'org_admin'
-    const organizationId = userData.role === "org_admin" ? org.id : null;
+  await prisma.user.update({
+    where: { id: orgAdmin.id },
+    data: {
+      organizationId: org.id,
+    },
+  });
 
-    const user = await prisma.user.create({
-      data: {
-        email: userData.email,
-        password: hashedPassword,
-        name: userData.name,
-        status: UserStatus.ACTIVE,
-        // ✨ Gán organizationId (null cho super_admin và client)
-        organizationId: organizationId,
-      },
-    });
+  const client = await prisma.user.create({
+    data: {
+      email: "client@gmail.com",
+      password: hashedPassword,
+      name: "Client",
+      status: UserStatus.ACTIVE,
+    },
+  });
 
-    // Gán role tương ứng
-    await prisma.userRole.create({
-      data: {
-        userId: user.id,
-        roleName: userData.role,
-      },
-    });
+  await prisma.userRole.create({
+    data: {
+      userId: client.id,
+      roleName: "client",
+    },
+  });
 
-    const orgStatus = organizationId ? `(Org ID: ${organizationId})` : `(Không có Org)`;
-    console.log(`Đã tạo User: ${user.email} với role '${userData.role}' ${orgStatus}.`);
-  }
+  console.log(`Đã tạo Client: ${client.email}`);
 
   console.log("Bắt đầu Seed Route Permissions...");
 

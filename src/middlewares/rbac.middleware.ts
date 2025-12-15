@@ -1,6 +1,5 @@
 import { NextFunction, Response } from "express";
 import { StatusCodes } from "http-status-codes";
-import { getUserPermissions } from "@/utils/rbacUtils";
 import { AuthenticatedRequest } from "@/middlewares/auth.middleware";
 import prisma from "@/prismaClient";
 import { logger } from "@/utils/logger";
@@ -58,7 +57,7 @@ export const rbacMiddleware = async (
   const requiredPermission = routePermission.permissionName;
 
   // 5. Lấy tất cả quyền hiệu quả của người dùng
-  const userPermissions = await getUserPermissions(req.user.id);
+  const userPermissions = req.user.permissions;
 
   // 6. Kiểm tra ủy quyền
   const hasRequiredPermission = userPermissions.includes(requiredPermission);

@@ -8,6 +8,7 @@ import { LoginDto } from "@/dtos/login.dto";
 import ms from "ms";
 import { RePaymentDto } from "@/dtos/re-payment.dto";
 import { generateToken, verifyToken } from "@/utils/jwtProvider";
+import { permission } from "process";
 
 const registerUser = wrapAsync(async (req: Request, res: Response) => {
   logger.info("Starting user registration (PENDING payment)...");
@@ -81,6 +82,7 @@ const refreshToken = wrapAsync(async (req: Request, res: Response) => {
     email: decoded.email,
     name: decoded.name,
     roles: decoded.roles,
+    permissions: decoded.permissions,
     organizationId: decoded.organizationId,
   };
 
