@@ -2,13 +2,14 @@ import { Request, Response } from "express";
 import { logger } from "@/utils/logger";
 import { wrapAsync } from "@/utils/wrapAsync";
 import * as userService from "@/services/user.service";
-import { CreateUserDto, RegisterUserDto, UpdateUserDto } from "@/dtos/user.dto";
+import { ChangePasswordDto, CreateUserDto, RegisterUserDto, UpdateUserDto } from "@/dtos/user.dto";
 import { StatusCodes } from "http-status-codes";
 import { LoginDto } from "@/dtos/login.dto";
 import ms from "ms";
 import { RePaymentDto } from "@/dtos/re-payment.dto";
 import { generateToken, verifyToken } from "@/utils/jwtProvider";
 import { permission } from "process";
+import { AuthenticatedRequest } from "@/middlewares/auth.middleware";
 
 const registerUser = wrapAsync(async (req: Request, res: Response) => {
   logger.info("Starting user registration (PENDING payment)...");
@@ -128,6 +129,16 @@ const createUser = wrapAsync(async (req: Request, res: Response) => {
   res.status(StatusCodes.OK).json(result);
 });
 
+const changePassword = wrapAsync(async (req: AuthenticatedRequest, res: Response) => {
+  logger.info("User change password...");
+  const body = req.body as ChangePasswordDto;
+  const userId = req.user?.id!;
+  const result = await userService.handleChangePassword(userId, body);
+
+  res.locals.message = "Đổi mật khẩu thành công";
+  res.status(StatusCodes.OK).json(result);
+});
+
 export const userController = {
   registerUser,
   getUsers,
@@ -138,4 +149,5 @@ export const userController = {
   getUserDetails,
   updateUser,
   createUser,
+  changePassword,
 };

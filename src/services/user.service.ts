@@ -1,5 +1,5 @@
 import { HttpException } from "@/exceptions/http-exception";
-import { CreateUserDto, RegisterUserDto, UpdateUserDto } from "@/dtos/user.dto";
+import { ChangePasswordDto, CreateUserDto, RegisterUserDto, UpdateUserDto } from "@/dtos/user.dto";
 import prisma from "@/prismaClient";
 import { StatusCodes } from "http-status-codes";
 import * as bcrypt from "bcrypt";
@@ -72,33 +72,35 @@ export async function register(dto: RegisterUserDto) {
   // 3. Băm (Hash) mật khẩu
   const hashedPassword = await bcrypt.hash(dto.password, 10);
 
+  const isOrgRegister = !!dto.organizationName;
+  const userRole = isOrgRegister ? ROLES.ORG_ADMIN : ROLES.CLIENT;
+
   const [newUser, newPayment] = await prisma.$transaction(async (tx) => {
-    // BƯỚC 4A: Tạo User với trạng thái PENDING
+    // 1. Tạo USER
     const user = await tx.user.create({
       data: {
         email: dto.email,
         password: hashedPassword,
         name: dto.name,
         status: UserStatus.PENDING,
-        // ✨ Gán role mặc định cho user đăng ký mới
         roles: {
           create: {
-            roleName: ROLES.CLIENT,
+            roleName: userRole,
           },
         },
       },
     });
 
-    // --- 2. Nếu đăng ký tổ chức → tạo ORGANIZATION + gán OWNER ---
-    if (dto.organizationName) {
+    // 2. Nếu đăng ký tổ chức → tạo ORGANIZATION
+    if (isOrgRegister) {
       const organization = await tx.organization.create({
         data: {
-          name: dto.organizationName,
-          ownerId: user.id, // ✅ USER LÀ OWNER
+          name: dto.organizationName!,
+          ownerId: user.id, // ✅ OWNER
         },
       });
 
-      // --- 3. Gán user vào organization ---
+      // 3. Gán user vào organization
       await tx.user.update({
         where: { id: user.id },
         data: {
@@ -107,15 +109,14 @@ export async function register(dto: RegisterUserDto) {
       });
     }
 
-    // BƯỚC 4B: Tạo bản ghi Payment với userId đã có
+    // 4. Tạo PAYMENT
     const payment = await tx.payment.create({
       data: {
-        userId: user.id, // Liên kết ngay lập tức
+        userId: user.id,
         subscriptionId: subscription.id,
         amount: subscription.price,
         paymentType: PaymentType.REGISTER,
         status: PaymentStatus.PENDING,
-        // transactionId sẽ được thêm sau khi cổng thanh toán phản hồi
       },
     });
 
@@ -538,4 +539,53 @@ export async function updateUser(id: number, dto: Partial<UpdateUserDto>) {
       roles: userWithRoles?.roles.map((r) => r.roleName) ?? [],
     };
   });
+}
+
+export async function handleChangePassword(userId: number, dto: ChangePasswordDto) {
+  // 1. Tìm user
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      password: true,
+      status: true,
+    },
+  });
+
+  if (!user) {
+    throw new HttpException(StatusCodes.NOT_FOUND, "Người dùng không tồn tại");
+  }
+
+  // (Optional) chỉ cho ACTIVE đổi mật khẩu
+  if (user.status !== UserStatus.ACTIVE) {
+    throw new HttpException(StatusCodes.FORBIDDEN, "Tài khoản chưa được kích hoạt");
+  }
+
+  // 2. Kiểm tra mật khẩu cũ
+  const isMatch = await bcrypt.compare(dto.oldPassword, user.password);
+
+  if (!isMatch) {
+    throw new HttpException(StatusCodes.BAD_REQUEST, "Mật khẩu cũ không đúng");
+  }
+
+  // 3. Không cho đặt mật khẩu mới trùng mật khẩu cũ
+  const isSamePassword = await bcrypt.compare(dto.newPassword, user.password);
+  if (isSamePassword) {
+    throw new HttpException(StatusCodes.BAD_REQUEST, "Mật khẩu mới không được trùng mật khẩu cũ");
+  }
+
+  // 4. Hash mật khẩu mới
+  const hashedNewPassword = await bcrypt.hash(dto.newPassword, 10);
+
+  // 5. Update password
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      password: hashedNewPassword,
+    },
+  });
+
+  return {
+    userId: user.id,
+  };
 }
