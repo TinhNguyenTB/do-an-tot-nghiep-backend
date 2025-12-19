@@ -1,5 +1,5 @@
 import { HttpException } from "@/exceptions/http-exception";
-import { ChangePasswordDto, CreateUserDto, RegisterUserDto, UpdateUserDto } from "@/dtos/user.dto";
+import { CreateUserDto, RegisterUserDto, UpdateUserDto } from "@/dtos/user.dto";
 import prisma from "@/prismaClient";
 import { StatusCodes } from "http-status-codes";
 import * as bcrypt from "bcrypt";
@@ -13,6 +13,7 @@ import { generateToken } from "@/utils/jwtProvider";
 import { RePaymentDto } from "@/dtos/re-payment.dto";
 import { getUserPermissions } from "@/utils/rbacUtils";
 import { uploadImageToCloudinary } from "@/utils/uploadImageToCloudinary";
+import { ChangePasswordDto } from "@/dtos/auth.dto";
 
 export async function createUser(dto: CreateUserDto, defaultPassword: string) {
   const existingUser = await prisma.user.findUnique({ where: { email: dto.email } });
@@ -613,5 +614,47 @@ export async function uploadUserAvatar(userId: number, file: Express.Multer.File
 
   return {
     avatar: url,
+  };
+}
+
+export async function getUserProfile(userId: number) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      status: true,
+      avatar: true,
+      createdAt: true,
+
+      organization: {
+        select: {
+          id: true,
+          name: true,
+          description: true,
+        },
+      },
+
+      roles: {
+        select: {
+          role: {
+            select: {
+              name: true,
+              description: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!user) {
+    throw new HttpException(StatusCodes.NOT_FOUND, "Người dùng không tồn tại");
+  }
+
+  return {
+    ...user,
+    roles: user.roles.map((r) => r.role.name),
   };
 }

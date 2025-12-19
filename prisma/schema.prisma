@@ -38,12 +38,13 @@ enum SubscriptionStatus {
 model Organization {
   id          Int      @id @default(autoincrement())
   name        String   @db.VarChar(255)
-  ownerId     Int      @map("owner_id") 
+  ownerId     Int      @map("owner_id")
   description String?  @db.Text
+  logo        String?
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-owner User @relation("OrganizationOwner", fields: [ownerId], references: [id])
+  owner User   @relation("OrganizationOwner", fields: [ownerId], references: [id])
   users User[]
 }
 
@@ -63,9 +64,9 @@ model Role {
 }
 
 model Permission {
-  name        String            @id @db.VarChar(100) // PRIMARY KEY
-  description String?           @db.Text
-  endpoints      EndpointPermission[] // Một Permission có thể được dùng cho nhiều endpoint
+  name        String               @id @db.VarChar(100) // PRIMARY KEY
+  description String?              @db.Text
+  endpoints   EndpointPermission[] // Một Permission có thể được dùng cho nhiều endpoint
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -115,11 +116,12 @@ model User {
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")
 
-  roles             UserRole[]
-  organization      Organization?      @relation(fields: [organizationId], references: [id])
-  ownedOrganizations Organization[] @relation("OrganizationOwner")
-  payments          Payment[]
-  userSubscriptions UserSubscription[]
+  roles               UserRole[]
+  organization        Organization?        @relation(fields: [organizationId], references: [id])
+  ownedOrganizations  Organization[]       @relation("OrganizationOwner")
+  payments            Payment[]
+  userSubscriptions   UserSubscription[]
+  passwordResetTokens PasswordResetToken[]
 }
 
 model UserRole {
@@ -190,7 +192,7 @@ model StripeCustomer {
 model EndpointPermission {
   id             Int    @id @default(autoincrement())
   httpMethod     String @map("http_method") @db.VarChar(10) // GET, POST, PATCH, DELETE
-  endpoint      String  @db.VarChar(255) // Ví dụ: /subscriptions/:id
+  endpoint       String @db.VarChar(255) // Ví dụ: /subscriptions/:id
   permissionName String @map("permission_name")
 
   permission Permission @relation(fields: [permissionName], references: [name])
@@ -201,4 +203,17 @@ model EndpointPermission {
   // Đảm bảo không có hai bản ghi RoutePermission giống nhau (Method + endpoint)
   @@unique([httpMethod, endpoint])
   @@map("endpoint_permissions")
+}
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  otpHash   String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

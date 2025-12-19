@@ -52,10 +52,3 @@ export class CreateUserDto {
   @IsArray()
   roles!: string[];
 }
-
-export class ChangePasswordDto {
-  @IsNotEmpty({ message: "Mật khẩu cũ không được để trống." })
-  oldPassword!: string;
-  @IsNotEmpty({ message: "Mật khẩu mới không được để trống." })
-  newPassword!: string;
-}

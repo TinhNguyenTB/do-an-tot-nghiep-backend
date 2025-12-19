@@ -2,14 +2,14 @@ import { Request, Response } from "express";
 import { logger } from "@/utils/logger";
 import { wrapAsync } from "@/utils/wrapAsync";
 import * as userService from "@/services/user.service";
-import { ChangePasswordDto, CreateUserDto, RegisterUserDto, UpdateUserDto } from "@/dtos/user.dto";
+import { CreateUserDto, RegisterUserDto, UpdateUserDto } from "@/dtos/user.dto";
 import { StatusCodes } from "http-status-codes";
 import { LoginDto } from "@/dtos/login.dto";
 import ms from "ms";
 import { RePaymentDto } from "@/dtos/re-payment.dto";
 import { generateToken, verifyToken } from "@/utils/jwtProvider";
-import { permission } from "process";
 import { AuthenticatedRequest } from "@/middlewares/auth.middleware";
+import { ChangePasswordDto } from "@/dtos/auth.dto";
 
 const registerUser = wrapAsync(async (req: Request, res: Response) => {
   logger.info("Starting user registration (PENDING payment)...");
@@ -145,9 +145,17 @@ export const uploadAvatar = wrapAsync(async (req: AuthenticatedRequest, res: Res
   const result = await userService.uploadUserAvatar(userId!, req.file!);
 
   res.locals.message = "Upload avatar thành công";
-  res.status(StatusCodes.OK).json({
-    data: result,
-  });
+  res.status(StatusCodes.OK).json(result);
+});
+
+const getProfile = wrapAsync(async (req: AuthenticatedRequest, res: Response) => {
+  logger.info("Fetching user profile...");
+
+  const userId = req?.user?.id; // từ auth middleware
+  const profile = await userService.getUserProfile(userId!);
+
+  res.locals.message = "Lấy thông tin profile thành công.";
+  res.status(StatusCodes.OK).json(profile);
 });
 
 export const userController = {
@@ -162,4 +170,5 @@ export const userController = {
   createUser,
   changePassword,
   uploadAvatar,
+  getProfile,
 };
