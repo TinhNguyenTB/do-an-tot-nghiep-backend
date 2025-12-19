@@ -45,6 +45,7 @@ const MOCK_ROLES = [
   {
     name: "client",
     permissions: [
+      "change_self_password",
       "read_subscriptions",
       "read_self_subscription", // Quyền xem gói dịch vụ hiện tại của bản thân
       "update_self_profile", // Quyền cập nhật thông tin cá nhân
@@ -95,11 +96,12 @@ async function main() {
   await prisma.userRole.deleteMany({});
   await prisma.roleInheritance.deleteMany({});
   await prisma.rolePermission.deleteMany({});
+  await prisma.organization.deleteMany({});
   await prisma.user.deleteMany({});
   await prisma.role.deleteMany({});
   await prisma.permission.deleteMany({});
   await prisma.subscription.deleteMany({});
-  await prisma.organization.deleteMany({});
+
   await prisma.stripeCustomer.deleteMany({});
   console.log("Đã xóa dữ liệu cũ.");
 
@@ -320,6 +322,11 @@ async function main() {
     { httpMethod: "GET", endpoint: "/users/:id", permissionName: "read_users_details" },
     { httpMethod: "PATCH", endpoint: "/users/:id", permissionName: "update_users" },
     { httpMethod: "DELETE", endpoint: "/users/:id", permissionName: "delete_users" },
+    {
+      httpMethod: "PATCH",
+      endpoint: "/users/change-password",
+      permissionName: "change_self_password",
+    },
 
     // --- 3. ROLES ROUTES (QUẢN LÝ RBAC) ---
     { httpMethod: "GET", endpoint: "/roles", permissionName: "read_roles" },

@@ -12,6 +12,7 @@ import { LoginDto } from "@/dtos/login.dto";
 import { generateToken } from "@/utils/jwtProvider";
 import { RePaymentDto } from "@/dtos/re-payment.dto";
 import { getUserPermissions } from "@/utils/rbacUtils";
+import { uploadImageToCloudinary } from "@/utils/uploadImageToCloudinary";
 
 export async function createUser(dto: CreateUserDto, defaultPassword: string) {
   const existingUser = await prisma.user.findUnique({ where: { email: dto.email } });
@@ -587,5 +588,30 @@ export async function handleChangePassword(userId: number, dto: ChangePasswordDt
 
   return {
     userId: user.id,
+  };
+}
+
+export async function uploadUserAvatar(userId: number, file: Express.Multer.File) {
+  if (!file) {
+    throw new HttpException(StatusCodes.BAD_REQUEST, "File avatar không tồn tại");
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    throw new HttpException(StatusCodes.NOT_FOUND, "User không tồn tại");
+  }
+
+  const { url, publicId } = await uploadImageToCloudinary(file.buffer, userId);
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      avatar: url,
+      publicId,
+    },
+  });
+
+  return {
+    avatar: url,
   };
 }

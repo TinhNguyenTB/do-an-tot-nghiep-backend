@@ -139,6 +139,17 @@ const changePassword = wrapAsync(async (req: AuthenticatedRequest, res: Response
   res.status(StatusCodes.OK).json(result);
 });
 
+export const uploadAvatar = wrapAsync(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req?.user?.id;
+
+  const result = await userService.uploadUserAvatar(userId!, req.file!);
+
+  res.locals.message = "Upload avatar thành công";
+  res.status(StatusCodes.OK).json({
+    data: result,
+  });
+});
+
 export const userController = {
   registerUser,
   getUsers,
@@ -150,4 +161,5 @@ export const userController = {
   updateUser,
   createUser,
   changePassword,
+  uploadAvatar,
 };

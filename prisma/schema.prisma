@@ -108,6 +108,8 @@ model User {
   email          String  @unique @db.VarChar(255)
   password       String  @db.VarChar(255)
   name           String? @db.VarChar(255)
+  avatar         String?
+  publicId       String?
 
   status    UserStatus
   createdAt DateTime   @default(now()) @map("created_at")
