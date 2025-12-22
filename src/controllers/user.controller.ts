@@ -109,7 +109,7 @@ const getUserDetails = wrapAsync(async (req: Request, res: Response) => {
 });
 
 const updateUser = wrapAsync(async (req: Request, res: Response) => {
-  logger.info("Fetching user details...");
+  logger.info("Updating user details...");
   const id = Number(req.params.id);
   const body = req.body as UpdateUserDto;
   const result = await userService.updateUser(id, body);

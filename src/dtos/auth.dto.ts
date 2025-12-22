@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty } from "class-validator";
+import { IsEmail, IsNotEmpty, Length } from "class-validator";
 
 export class ChangePasswordDto {
   @IsNotEmpty({ message: "Mật khẩu cũ không được để trống." })
@@ -21,4 +21,10 @@ export class ResetPasswordDto {
 
   @IsNotEmpty({ message: "Mật khẩu mới không được để trống." })
   newPassword!: string;
+}
+
+export class UpdateProfileDto {
+  @IsNotEmpty({ message: "Tên không được để trống." })
+  @Length(2, 100, { message: "Tên phải dài từ 2 đến 100 ký tự." })
+  name!: string;
 }

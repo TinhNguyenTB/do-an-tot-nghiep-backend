@@ -5,7 +5,12 @@ import { RegisterUserDto } from "@/dtos/user.dto";
 import { LoginDto } from "@/dtos/login.dto";
 import { authMiddleware } from "@/middlewares/auth.middleware";
 import { rbacMiddleware } from "@/middlewares/rbac.middleware";
-import { ChangePasswordDto, ForgotPasswordDto, ResetPasswordDto } from "@/dtos/auth.dto";
+import {
+  ChangePasswordDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
+  UpdateProfileDto,
+} from "@/dtos/auth.dto";
 import { authController } from "@/controllers/auth.controller";
 import { uploadMiddleware } from "@/middlewares/upload.middleware";
 
@@ -25,6 +30,13 @@ router.patch(
 );
 
 router.get("/auth/profile", authMiddleware, userController.getProfile);
+
+router.patch(
+  "/auth/profile",
+  authMiddleware,
+  ValidationPipe(UpdateProfileDto),
+  authController.updateProfile
+);
 
 router.post(
   "/auth/forgot-password",

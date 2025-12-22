@@ -5,6 +5,7 @@ import { sendMailTemplate } from "@/utils/mail";
 import { StatusCodes } from "http-status-codes";
 import crypto from "crypto";
 import * as bcrypt from "bcrypt";
+import { UpdateProfileDto } from "@/dtos/auth.dto";
 
 export async function sendResetOtp(email: string) {
   const user = await prisma.user.findUnique({ where: { email } });
@@ -73,4 +74,31 @@ export async function resetPassword(email: string, otp: string, newPassword: str
       data: { used: true },
     }),
   ]);
+}
+
+export async function updateUserProfile(userId: number, dto: UpdateProfileDto) {
+  // 1. Kiểm tra user tồn tại
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+
+  if (!user) {
+    throw new HttpException(StatusCodes.NOT_FOUND, "Người dùng không tồn tại");
+  }
+
+  // 2. Update profile (chỉ name)
+  const updatedUser = await prisma.user.update({
+    where: { id: userId },
+    data: {
+      name: dto.name,
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      organizationId: true,
+    },
+  });
+
+  return updatedUser;
 }
