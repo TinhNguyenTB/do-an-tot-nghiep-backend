@@ -7,6 +7,7 @@ import { authMiddleware } from "@/middlewares/auth.middleware";
 import { rbacMiddleware } from "@/middlewares/rbac.middleware";
 import { ChangePasswordDto, ForgotPasswordDto, ResetPasswordDto } from "@/dtos/auth.dto";
 import { authController } from "@/controllers/auth.controller";
+import { uploadMiddleware } from "@/middlewares/upload.middleware";
 
 const router = Router();
 
@@ -32,5 +33,7 @@ router.post(
 );
 
 router.post("/auth/reset-password", ValidationPipe(ResetPasswordDto), authController.resetPassword);
+
+router.post("/auth/upload-avatar", authMiddleware, uploadMiddleware, userController.uploadAvatar);
 
 export const authRoute = router;

@@ -324,7 +324,7 @@ async function main() {
     { httpMethod: "DELETE", endpoint: "/users/:id", permissionName: "delete_users" },
     {
       httpMethod: "PATCH",
-      endpoint: "/users/change-password",
+      endpoint: "/auth/change-password",
       permissionName: "change_self_password",
     },
 

@@ -4,7 +4,6 @@ import { ValidationPipe } from "@/pipes/validation.pipe";
 import { RePaymentDto } from "@/dtos/re-payment.dto";
 import { authMiddleware } from "@/middlewares/auth.middleware";
 import { rbacMiddleware } from "@/middlewares/rbac.middleware";
-import { uploadMiddleware } from "@/middlewares/upload.middlewate";
 
 const router = Router();
 
@@ -17,7 +16,5 @@ router.get("/users/:id", authMiddleware, rbacMiddleware, userController.getUserD
 router.patch("/users/:id", authMiddleware, rbacMiddleware, userController.updateUser);
 
 router.post("/users/re-payment", ValidationPipe(RePaymentDto), userController.rePayment);
-
-router.post("/users/upload-avatar", authMiddleware, uploadMiddleware, userController.uploadAvatar);
 
 export const userRoute = router;
