@@ -24,7 +24,7 @@ const resetPassword = wrapAsync(async (req, res) => {
   await authService.resetPassword(email, otp, newPassword);
 
   res.locals.message = "Đổi mật khẩu thành công";
-  res.status(StatusCodes.OK).send();
+  res.status(StatusCodes.OK).json();
 });
 
 const updateProfile = wrapAsync(async (req: AuthenticatedRequest, res: Response) => {

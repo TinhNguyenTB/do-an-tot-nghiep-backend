@@ -96,6 +96,7 @@ export async function updateUserProfile(userId: number, dto: UpdateProfileDto) {
       id: true,
       name: true,
       email: true,
+      avatar: true,
       organizationId: true,
     },
   });

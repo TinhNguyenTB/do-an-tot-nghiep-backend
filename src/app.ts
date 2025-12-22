@@ -1,4 +1,5 @@
 import "dotenv/config";
+import "reflect-metadata";
 import express from "express";
 import router from "@/routes";
 import { logger } from "@/utils/logger";

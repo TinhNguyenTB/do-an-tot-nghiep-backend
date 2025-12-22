@@ -84,6 +84,7 @@ const refreshToken = wrapAsync(async (req: Request, res: Response) => {
     name: decoded.name,
     roles: decoded.roles,
     permissions: decoded.permissions,
+    avatar: decoded.avatar,
     organizationId: decoded.organizationId,
   };
 

@@ -1,5 +1,8 @@
+import { CreateRoleDto } from "@/dtos/role.dto";
+import { HttpException } from "@/exceptions/http-exception";
 import prisma from "@/prismaClient";
 import { Prisma } from "@prisma/client";
+import { StatusCodes } from "http-status-codes";
 
 // --- READ ALL ---
 export async function getAllRoles(queryParams: { [key: string]: any }) {
@@ -76,62 +79,133 @@ export async function getAllRoles(queryParams: { [key: string]: any }) {
   };
 }
 
-// Trong RoleService.ts
+async function hasCircularInheritance(
+  parentRole: string,
+  childRole: string,
+  visited = new Set<string>()
+): Promise<boolean> {
+  if (parentRole === childRole) return true;
 
-/**
- * Kiểm tra xem việc thêm quan hệ cha-con (parentId -> childId) có tạo ra vòng lặp hay không.
- * @param parentId Role cha mới.
- * @param childId Role con.
- * @returns true nếu tạo vòng lặp, false nếu hợp lệ.
- */
-// async function createsCycle(parentId: string, childId: string): Promise<boolean> {
-//     // 1. Nếu cha mới chính là con, đã là vòng lặp.
-//     if (parentId === childId) {
-//         return true;
-//     }
+  if (visited.has(childRole)) return false;
+  visited.add(childRole);
 
-//     // 2. Kiểm tra xem Role con (childId) có đang là tổ tiên của Role cha (parentId) hay không.
-//     // Tức là: Liệu parentId có thể kế thừa (trực tiếp hoặc gián tiếp) từ childId?
+  // Lấy tất cả role cha của childRole
+  const parents = await prisma.roleInheritance.findMany({
+    where: { childId: childRole },
+    select: { parentId: true },
+  });
 
-//     const childrenOfNewParent = new Set<string>(); // Các Role được kế thừa từ cha mới (parentId)
+  for (const { parentId } of parents) {
+    if (parentId === parentRole) return true;
 
-//     // Hàm đệ quy kiểm tra tất cả các con cháu của Role cha
-//     async function traverseChildren(currentRole: string): Promise<void> {
-//         const nextChildren = await prisma.roleInheritance.findMany({
-//             where: { parentId: currentRole },
-//             select: { childId: true },
-//         });
+    const hasCycle = await hasCircularInheritance(parentRole, parentId, visited);
+    if (hasCycle) return true;
+  }
 
-//         for (const { childId: nextChildId } of nextChildren) {
-//             if (childrenOfNewParent.has(nextChildId)) continue;
+  return false;
+}
 
-//             // Nếu phát hiện ra childId (vai trò con) đã là hậu duệ của parentId (vai trò cha)
-//             if (nextChildId === childId) {
-//                 throw new Error("Cycle Detected");
-//             }
+export const handleCreateRole = async (payload: CreateRoleDto) => {
+  const { name, description, inheritsFrom, permissions } = payload;
 
-//             childrenOfNewParent.add(nextChildId);
-//             await traverseChildren(nextChildId);
-//         }
-//     }
+  // 1. Check role tồn tại
+  const existedRole = await prisma.role.findUnique({
+    where: { name },
+  });
 
-//     try {
-//         // Bắt đầu duyệt từ vai trò cha mới (parentId)
-//         await traverseChildren(parentId);
-//         return false; // Không có vòng lặp
-//     } catch (error) {
-//         if (error.message === "Cycle Detected") {
-//             return true; // Đã tìm thấy vòng lặp
-//         }
-//         throw error;
-//     }
-// }
+  if (existedRole) {
+    throw new HttpException(StatusCodes.CONFLICT, "Vai trò đã tồn tại");
+  }
 
-// const isCycle = await createsCycle(newParentRole, newChildRole);
+  // =========================
+  // 2. VALIDATE PARENTS
+  // =========================
+  if (inheritsFrom?.length) {
+    const parentNames = inheritsFrom.map((p) => p.name);
 
-// if (isCycle) {
-//     throw new Error(`Không thể tạo quan hệ kế thừa: ${newParentRole} đã kế thừa từ ${newChildRole} (vòng lặp).`);
-// }
+    const existedParents = await prisma.role.findMany({
+      where: { name: { in: parentNames } },
+      select: { name: true },
+    });
 
-// // Nếu không có vòng lặp, tiến hành tạo:
-// await prisma.roleInheritance.create({ data: { parentId: newParentRole, childId: newChildRole } });
+    const existedParentNames = existedParents.map((r) => r.name);
+
+    const notFoundParents = parentNames.filter((p) => !existedParentNames.includes(p));
+
+    if (notFoundParents.length) {
+      throw new HttpException(
+        StatusCodes.BAD_REQUEST,
+        `Role cha không tồn tại: ${notFoundParents.join(", ")}`
+      );
+    }
+
+    // Check circular inheritance
+    // for (const parent of parentNames) {
+    //   const isCircular = await hasCircularInheritance(parent, name);
+    //   if (isCircular) {
+    //     throw new HttpException(
+    //       StatusCodes.CONFLICT,
+    //       `Role "${parent}" không thể kế thừa từ "${name}" (circular dependency)`
+    //     );
+    //   }
+    // }
+  }
+
+  // =========================
+  // 3. VALIDATE PERMISSIONS
+  // =========================
+  if (permissions?.length) {
+    const existedPermissions = await prisma.permission.findMany({
+      where: { name: { in: permissions } },
+      select: { name: true },
+    });
+
+    const existedPermissionNames = existedPermissions.map((p) => p.name);
+
+    const notFoundPermissions = permissions.filter((p) => !existedPermissionNames.includes(p));
+
+    if (notFoundPermissions.length) {
+      throw new HttpException(
+        StatusCodes.BAD_REQUEST,
+        `Permission không tồn tại: ${notFoundPermissions.join(", ")}`
+      );
+    }
+  }
+
+  // =========================
+  // 4. TRANSACTION
+  // =========================
+  return prisma.$transaction(async (tx) => {
+    // 4.1 Create role
+    const role = await tx.role.create({
+      data: {
+        name,
+        description,
+      },
+    });
+
+    // 4.2 Assign permissions
+    if (permissions?.length) {
+      await tx.rolePermission.createMany({
+        data: permissions.map((permissionName) => ({
+          roleName: name,
+          permissionName,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    // 4.3 Role inheritance
+    if (inheritsFrom?.length) {
+      await tx.roleInheritance.createMany({
+        data: inheritsFrom.map((parent) => ({
+          parentId: parent.name,
+          childId: name,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    return role;
+  });
+};

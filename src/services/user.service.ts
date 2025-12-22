@@ -431,6 +431,7 @@ export async function handleLogin(dto: LoginDto) {
     email: user.email,
     name: user.name,
     roles: roleNames,
+    avatar: user.avatar,
     permissions,
     organizationId: user.organizationId,
   };

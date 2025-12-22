@@ -3,17 +3,17 @@ import { logger } from "@/utils/logger";
 import { wrapAsync } from "@/utils/wrapAsync";
 import { StatusCodes } from "http-status-codes";
 import * as roleService from "@/services/role.service";
-import { renderTemplate, transporter } from "@/configs/email.config";
+import { CreateRoleDto } from "@/dtos/role.dto";
 
 // // --- CREATE ---
-// const createSubscription = wrapAsync(async (req: Request, res: Response) => {
-//   logger.info("Creating new subscription...");
-//   const dto = req.body as CreateSubscriptionDto;
+const createRole = wrapAsync(async (req: Request, res: Response) => {
+  logger.info("Creating new role...");
+  const dto = req.body as CreateRoleDto;
 
-//   const newSub = await subService.createSubscription(dto);
-//   res.locals.message = "Đã tạo gói dịch vụ mới.";
-//   res.status(StatusCodes.CREATED).json(newSub);
-// });
+  const result = await roleService.handleCreateRole(dto);
+  res.locals.message = "Đã tạo vai trò mới.";
+  res.status(StatusCodes.CREATED).json(result);
+});
 
 // --- READ ALL (Có Pagination, Sort và Filters) ---
 const getRoles = wrapAsync(async (req: Request, res: Response) => {
@@ -51,20 +51,7 @@ const getRoles = wrapAsync(async (req: Request, res: Response) => {
 //   res.status(StatusCodes.NO_CONTENT).send(); // Phản hồi 204 No Content
 // });
 
-const sendWelcomeMail = async (to: string, context: any) => {
-  const html = renderTemplate("welcome", context);
-
-  await transporter.sendMail({
-    from: process.env.EMAIL_USER,
-    to,
-    subject: "Welcome!",
-    html,
-  });
-
-  console.log("Email sent!");
-};
-
 export const roleController = {
   getRoles,
-  sendWelcomeMail,
+  createRole,
 };
