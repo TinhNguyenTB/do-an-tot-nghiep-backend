@@ -55,12 +55,8 @@ export async function getAllRoles(queryParams: { [key: string]: any }) {
 
   const roles = data.map((role) => ({
     ...role,
-    inheritsFrom: role.inheritsFrom.map((i) => ({
-      name: i.parentId,
-    })),
-    inheritedBy: role.inheritedBy.map((i) => ({
-      name: i.childId,
-    })),
+    inheritsFrom: role.inheritsFrom.map((i) => i.parentId),
+    inheritedBy: role.inheritedBy.map((i) => i.childId),
   }));
 
   return {
@@ -113,12 +109,8 @@ export const getRoleDetail = async (name: string) => {
   return {
     name: role.name,
     description: role.description,
-    inheritsFrom: role.inheritsFrom.map((i) => ({
-      name: i.parentId,
-    })),
-    inheritedBy: role.inheritedBy.map((i) => ({
-      name: i.childId,
-    })),
+    inheritsFrom: role.inheritsFrom.map((i) => i.parentId),
+    inheritedBy: role.inheritedBy.map((i) => i.childId),
     permissions,
   };
 };
@@ -163,7 +155,7 @@ export const handleCreateRole = async (payload: CreateRoleDto) => {
   // 2. VALIDATE PARENTS
   // =========================
   if (inheritsFrom?.length) {
-    const parentNames = inheritsFrom.map((p) => p.name);
+    const parentNames = inheritsFrom.map((p) => p);
 
     const existedParents = await prisma.role.findMany({
       where: { name: { in: parentNames } },
@@ -224,7 +216,7 @@ export const handleCreateRole = async (payload: CreateRoleDto) => {
     if (inheritsFrom?.length) {
       await tx.roleInheritance.createMany({
         data: inheritsFrom.map((p) => ({
-          parentId: p.name,
+          parentId: p,
           childId: name,
         })),
         skipDuplicates: true,
@@ -321,16 +313,16 @@ export const handleUpdateRole = async (roleName: string, payload: UpdateRoleDto)
 
       // ✅ Validate circular trên trạng thái MỚI
       for (const parent of inheritsFrom) {
-        if (parent.name === roleName) {
+        if (parent === roleName) {
           throw new HttpException(StatusCodes.CONFLICT, "Role không thể kế thừa chính nó");
         }
 
-        const isCircular = await hasCircularInheritance(tx, parent.name, roleName);
+        const isCircular = await hasCircularInheritance(tx, parent, roleName);
 
         if (isCircular) {
           throw new HttpException(
             StatusCodes.CONFLICT,
-            `Circular inheritance: "${parent.name}" → "${roleName}"`
+            `Circular inheritance: "${parent}" → "${roleName}"`
           );
         }
       }
@@ -338,7 +330,7 @@ export const handleUpdateRole = async (roleName: string, payload: UpdateRoleDto)
       // ✅ Tạo lại quan hệ mới
       await tx.roleInheritance.createMany({
         data: inheritsFrom.map((p) => ({
-          parentId: p.name,
+          parentId: p,
           childId: roleName,
         })),
       });
