@@ -15,6 +15,7 @@ import { authController } from "@/controllers/auth.controller";
 import { uploadMiddleware } from "@/middlewares/upload.middleware";
 
 const router = Router();
+router.post("/auth/check-email", authController.checkEmailAvailability);
 
 router.post("/auth/register", ValidationPipe(RegisterUserDto), userController.registerUser);
 router.post("/auth/login", ValidationPipe(LoginDto), userController.login);

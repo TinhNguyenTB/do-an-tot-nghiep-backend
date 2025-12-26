@@ -37,8 +37,32 @@ const updateProfile = wrapAsync(async (req: AuthenticatedRequest, res: Response)
   res.status(StatusCodes.OK).json(result);
 });
 
+const checkEmailAvailability = wrapAsync(async (req: Request, res: Response) => {
+  const { email } = req.body;
+  if (!email || typeof email !== "string") {
+    return res.status(StatusCodes.BAD_REQUEST).json({ message: "Vui lòng cung cấp email hợp lệ." });
+  }
+
+  logger.info(`Checking email availability for: ${email}`);
+
+  const emailExists = await authService.checkEmailExists(email);
+
+  if (emailExists) {
+    res.locals.message = "Email này đã được sử dụng. Vui lòng chọn email khác.";
+    res.status(StatusCodes.CONFLICT).json({
+      isAvailable: false,
+    });
+  } else {
+    res.locals.message = "Email sẵn sàng để đăng ký.";
+    res.status(StatusCodes.OK).json({
+      isAvailable: true,
+    });
+  }
+});
+
 export const authController = {
   forgotPassword,
   resetPassword,
   updateProfile,
+  checkEmailAvailability,
 };

@@ -103,3 +103,16 @@ export async function updateUserProfile(userId: number, dto: UpdateProfileDto) {
 
   return updatedUser;
 }
+
+export async function checkEmailExists(email: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: {
+      email: email,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  return !!user;
+}

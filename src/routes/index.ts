@@ -6,6 +6,7 @@ import { roleRoute } from "@/routes/role.route";
 import { organizationRoute } from "@/routes/organization.route";
 import { endpointPermissionRoute } from "@/routes/endpoint-permission.route";
 import { permissionRoute } from "@/routes/permission.route";
+import { analyticsRoute } from "@/routes/analytics.routes";
 
 const router = Router();
 
@@ -17,7 +18,8 @@ router.use(
   roleRoute,
   organizationRoute,
   endpointPermissionRoute,
-  permissionRoute
+  permissionRoute,
+  analyticsRoute
 );
 
 export default router;
