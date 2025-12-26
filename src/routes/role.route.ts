@@ -9,6 +9,8 @@ const router = Router();
 
 router.get("/roles", authMiddleware, rbacMiddleware, roleController.getRoles);
 
+router.get("/roles/:name", authMiddleware, rbacMiddleware, roleController.getRoleByName);
+
 router.post(
   "/roles",
   authMiddleware,
@@ -17,33 +19,8 @@ router.post(
   roleController.createRole
 );
 
-// router.get(
-//   "/:id",
-//   authMiddleware,
-//   rbacMiddleware.isValidPermission(["manage_system_roles"]),
-//   roleController.getSubscription
-// );
+router.patch("/roles/:name", authMiddleware, rbacMiddleware, roleController.updateRole);
 
-// router.patch(
-//   "/:id",
-//   authMiddleware,
-//   rbacMiddleware.isValidPermission(["manage_system_roles"]),
-//   roleController.updateSubscription
-// );
-
-// router.post(
-//   "/",
-//   authMiddleware,
-//   rbacMiddleware.isValidPermission(["manage_system_roles"]),
-//   ValidationPipe(CreateSubscriptionDto),
-//   roleController.createSubscription
-// );
-
-// router.delete(
-//   "/:id",
-//   authMiddleware,
-//   rbacMiddleware.isValidPermission(["manage_system_roles"]),
-//   roleController.deleteSubscription
-// );
+router.delete("/roles/:name", authMiddleware, rbacMiddleware, roleController.deleteRole);
 
 export const roleRoute = router;

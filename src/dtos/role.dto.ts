@@ -1,3 +1,4 @@
+import { PermissionDto } from "@/dtos/permission.dto";
 import { Type } from "class-transformer";
 import {
   IsArray,
@@ -45,11 +46,50 @@ export class CreateRoleDto {
   @IsOptional()
   @IsArray({ message: "permissions phải là mảng." })
   @ArrayNotEmpty({ message: "permissions không được rỗng." })
-  @ArrayUnique({ message: "permissions không được trùng lặp." })
-  @IsString({ each: true, message: "Mỗi permission phải là string." })
-  @Length(2, 100, {
-    each: true,
-    message: "Tên permission phải dài từ 2 đến 100 ký tự.",
+  @ArrayUnique((o: PermissionDto) => o.name, {
+    message: "permissions không được trùng lặp.",
   })
-  permissions?: string[];
+  @ValidateNested({ each: true })
+  @Type(() => PermissionDto)
+  permissions?: PermissionDto[];
+}
+
+class InheritRoleDto {
+  @IsString()
+  @Length(2, 100, {
+    message: "Tên role kế thừa phải dài từ 2 đến 100 ký tự.",
+  })
+  name!: string;
+}
+
+export class UpdateRoleDto {
+  // Mô tả
+  @IsOptional()
+  @IsString()
+  @Length(0, 255, {
+    message: "Mô tả không được vượt quá 255 ký tự.",
+  })
+  description?: string;
+
+  // Danh sách role cha
+  @IsOptional()
+  @IsArray({ message: "inheritsFrom phải là mảng." })
+  @ArrayNotEmpty({ message: "inheritsFrom không được rỗng." })
+  @ArrayUnique((o: InheritRoleDto) => o.name, {
+    message: "inheritsFrom không được trùng role.",
+  })
+  @ValidateNested({ each: true })
+  @Type(() => InheritRoleDto)
+  inheritsFrom?: InheritRoleDto[];
+
+  // Danh sách permission
+  @IsOptional()
+  @IsArray({ message: "permissions phải là mảng." })
+  @ArrayNotEmpty({ message: "permissions không được rỗng." })
+  @ArrayUnique((o: PermissionDto) => o.name, {
+    message: "permissions không được trùng lặp.",
+  })
+  @ValidateNested({ each: true })
+  @Type(() => PermissionDto)
+  permissions?: PermissionDto[];
 }

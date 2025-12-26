@@ -3,7 +3,7 @@ import { logger } from "@/utils/logger";
 import { wrapAsync } from "@/utils/wrapAsync";
 import { StatusCodes } from "http-status-codes";
 import * as roleService from "@/services/role.service";
-import { CreateRoleDto } from "@/dtos/role.dto";
+import { CreateRoleDto, UpdateRoleDto } from "@/dtos/role.dto";
 
 // // --- CREATE ---
 const createRole = wrapAsync(async (req: Request, res: Response) => {
@@ -27,31 +27,41 @@ const getRoles = wrapAsync(async (req: Request, res: Response) => {
 });
 
 // // --- READ ONE ---
-// const getSubscription = wrapAsync(async (req: Request, res: Response) => {
-//   const id = Number(req.params.id);
-//   const sub = await subService.getSubscriptionById(id);
-//   res.locals.message = `Lấy gói dịch vụ ID: ${id} thành công.`;
-//   res.status(StatusCodes.OK).json(sub);
-// });
+const getRoleByName = wrapAsync(async (req: Request, res: Response) => {
+  const name = req.params.name;
+  logger.info(`Fetching role ${name}...`);
+
+  const role = await roleService.getRoleDetail(name);
+
+  res.locals.message = `Lấy role ${name} thành công.`;
+  res.status(StatusCodes.OK).json(role);
+});
 
 // // --- UPDATE ---
-// const updateSubscription = wrapAsync(async (req: Request, res: Response) => {
-//   const id = Number(req.params.id);
-//   const dto = req.body as Partial<CreateSubscriptionDto>;
+const updateRole = wrapAsync(async (req: Request, res: Response) => {
+  const name = req.params.name;
+  logger.info(`Updating role ${name}...`);
 
-//   const updatedSub = await subService.updateSubscription(id, dto);
-//   res.locals.message = `Cập nhật gói dịch vụ ID: ${id} thành công.`;
-//   res.status(StatusCodes.OK).json(updatedSub);
-// });
+  const dto = req.body as UpdateRoleDto;
+
+  const updatedRole = await roleService.handleUpdateRole(name, dto);
+  res.locals.message = `Cập nhật role: ${name} thành công.`;
+  res.status(StatusCodes.OK).json(updatedRole);
+});
 
 // // --- DELETE ---
-// const deleteSubscription = wrapAsync(async (req: Request, res: Response) => {
-//   const id = Number(req.params.id);
-//   await subService.deleteSubscription(id);
-//   res.status(StatusCodes.NO_CONTENT).send(); // Phản hồi 204 No Content
-// });
+const deleteRole = wrapAsync(async (req: Request, res: Response) => {
+  const name = req.params.name;
+  logger.info(`Deleting role ${name}...`);
+
+  await roleService.handleDeleteRole(name);
+  res.status(StatusCodes.NO_CONTENT).send(); // Phản hồi 204 No Content
+});
 
 export const roleController = {
   getRoles,
   createRole,
+  getRoleByName,
+  updateRole,
+  deleteRole,
 };
