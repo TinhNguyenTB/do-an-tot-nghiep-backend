@@ -1,6 +1,6 @@
-import { IsNotEmpty, IsOptional, IsString, Length } from "class-validator";
+import { IsInt, IsNotEmpty, IsOptional, IsString, Length } from "class-validator";
 
-export class PermissionDto {
+export class CreatePermissionDto {
   @IsString({ message: "Tên permission phải là chuỗi." })
   @IsNotEmpty({ message: "Tên permission không được để trống." })
   @Length(2, 100, {
@@ -14,4 +14,8 @@ export class PermissionDto {
     message: "Mô tả permission không được vượt quá 255 ký tự.",
   })
   description?: string;
+
+  @IsOptional()
+  @IsInt({ message: "organizationId phải là number." })
+  organizationId?: number;
 }

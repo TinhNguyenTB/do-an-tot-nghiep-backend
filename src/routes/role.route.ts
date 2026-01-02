@@ -9,7 +9,7 @@ const router = Router();
 
 router.get("/roles", authMiddleware, rbacMiddleware, roleController.getRoles);
 
-router.get("/roles/:name", authMiddleware, rbacMiddleware, roleController.getRoleByName);
+router.get("/roles/:id", authMiddleware, rbacMiddleware, roleController.getRoleById);
 
 router.post(
   "/roles",
@@ -19,8 +19,8 @@ router.post(
   roleController.createRole
 );
 
-router.patch("/roles/:name", authMiddleware, rbacMiddleware, roleController.updateRole);
+router.patch("/roles/:id", authMiddleware, rbacMiddleware, roleController.updateRole);
 
-router.delete("/roles/:name", authMiddleware, rbacMiddleware, roleController.deleteRole);
+router.delete("/roles/:id", authMiddleware, rbacMiddleware, roleController.deleteRole);
 
 export const roleRoute = router;

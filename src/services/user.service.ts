@@ -16,40 +16,85 @@ import { uploadImageToCloudinary } from "@/utils/uploadImageToCloudinary";
 import { ChangePasswordDto } from "@/dtos/auth.dto";
 
 export async function createUser(dto: CreateUserDto, defaultPassword: string) {
+  // 1. Kiểm tra email tồn tại
   const existingUser = await prisma.user.findUnique({ where: { email: dto.email } });
   if (existingUser) {
     throw new HttpException(StatusCodes.CONFLICT, "Email đã được sử dụng.");
   }
 
-  if (dto.organizationId) {
-    const organization = await prisma.organization.findUnique({
-      where: { id: dto.organizationId },
-    });
-    if (!organization) {
-      throw new HttpException(StatusCodes.NOT_FOUND, "Tổ chức không tìm thấy");
+  // 2. Validate Organization và Roles trong Transaction
+  return prisma.$transaction(async (tx) => {
+    // 2.1. Kiểm tra Organization tồn tại (nếu organizationId được cung cấp)
+    if (dto.organizationId !== undefined && dto.organizationId !== null) {
+      const organization = await tx.organization.findUnique({
+        where: { id: dto.organizationId },
+      });
+      if (!organization) {
+        throw new HttpException(StatusCodes.NOT_FOUND, "Tổ chức không tìm thấy");
+      }
     }
-  }
-  const hashedPassword = await bcrypt.hash(defaultPassword, 10);
-  const user = await prisma.user.create({
-    data: {
-      organizationId: dto.organizationId,
-      email: dto.email,
-      password: hashedPassword,
-      name: dto.name || "Người dùng mới",
-      status: UserStatus.ACTIVE,
-      roles: {
-        create: dto.roles.map((roleName) => ({
-          // Với mỗi tên vai trò trong mảng, tạo một bản ghi UserRole mới.
-          roleName: roleName,
-          // userId sẽ tự động được Prisma điền vào.
-        })),
+
+    // 2.2. Validate và Lấy Role ID
+    if (!dto.roles || dto.roles.length === 0) {
+      throw new HttpException(
+        StatusCodes.BAD_REQUEST,
+        "Phải gán ít nhất một vai trò cho người dùng."
+      );
+    }
+
+    // Tìm kiếm các Role dựa trên tên và lấy ID (chú ý: nếu có organizationId, có thể cần lọc theo Org)
+    // Giả định: Chỉ tìm các vai trò Global hoặc vai trò thuộc Organization được chỉ định.
+    const roles = await tx.role.findMany({
+      where: {
+        name: { in: dto.roles },
+        // Nếu có organizationId, tìm kiếm các roles thuộc Org đó HOẶC roles Global (organizationId: null)
+        // Tuy nhiên, để đơn giản và an toàn, ta chỉ tìm các vai trò KHÔNG thuộc Org khác.
+        OR: [
+          { organizationId: dto.organizationId ?? null }, // Thuộc Org hiện tại/Global
+          // Thêm logic để đảm bảo không gán vai trò Org-scope của Org khác nếu cần
+        ],
       },
-    },
+      select: { id: true, name: true },
+    });
+
+    if (roles.length !== dto.roles.length) {
+      // Xác định tên vai trò không hợp lệ để thông báo chi tiết hơn
+      const foundNames = roles.map((r) => r.name);
+      const invalidRoles = dto.roles.filter((name) => !foundNames.includes(name));
+      throw new HttpException(
+        StatusCodes.BAD_REQUEST,
+        `Một hoặc nhiều vai trò không hợp lệ hoặc không tồn tại: ${invalidRoles.join(", ")}`
+      );
+    }
+
+    const roleIdsToAssign = roles.map((r) => r.id);
+
+    // 3. Băm (Hash) mật khẩu
+    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+
+    // 4. Tạo USER và UserRoles lồng nhau
+    const user = await tx.user.create({
+      data: {
+        organizationId: dto.organizationId || null,
+        email: dto.email,
+        password: hashedPassword,
+        name: dto.name || "Người dùng mới",
+        status: UserStatus.ACTIVE,
+        roles: {
+          create: roleIdsToAssign.map((roleId) => ({
+            // ✅ SỬ DỤNG roleId (INT)
+            roleId: roleId,
+          })),
+        },
+      },
+    });
+
+    // 5. Trả về kết quả
+    return {
+      userId: user.id,
+      email: user.email,
+    };
   });
-  return {
-    userId: user.id,
-    email: user.email,
-  };
 }
 
 /**
@@ -75,10 +120,28 @@ export async function register(dto: RegisterUserDto) {
   const hashedPassword = await bcrypt.hash(dto.password, 10);
 
   const isOrgRegister = !!dto.organizationName;
-  const userRole = isOrgRegister ? ROLES.ORG_ADMIN : ROLES.CLIENT;
+  const desiredRoleName = isOrgRegister ? ROLES.ORG_ADMIN : ROLES.CLIENT;
 
+  // 4. Tìm Role ID tương ứng (Giả định Role này là Global/Base Role)
+  const roleRecord = await prisma.role.findFirst({
+    where: {
+      name: desiredRoleName,
+    },
+    select: { id: true },
+  });
+
+  if (!roleRecord) {
+    // Trường hợp không tìm thấy vai trò Global/Base (cần kiểm tra file seed)
+    throw new HttpException(
+      StatusCodes.INTERNAL_SERVER_ERROR,
+      `Không tìm thấy vai trò cơ sở: ${desiredRoleName}`
+    );
+  }
+  const roleId = roleRecord.id;
+
+  // Bắt đầu Transaction
   const [newUser, newPayment] = await prisma.$transaction(async (tx) => {
-    // 1. Tạo USER
+    // 2. Tạo USER
     const user = await tx.user.create({
       data: {
         email: dto.email,
@@ -87,27 +150,22 @@ export async function register(dto: RegisterUserDto) {
         status: UserStatus.PENDING,
         roles: {
           create: {
-            roleName: userRole,
+            roleId: roleId, // ✅ SỬ DỤNG roleId (INT)
           },
         },
       },
     });
 
-    // 2. Nếu đăng ký tổ chức → tạo ORGANIZATION
-    if (isOrgRegister) {
-      const organization = await tx.organization.create({
-        data: {
-          name: dto.organizationName!,
-          ownerId: user.id, // ✅ OWNER
-        },
+    // 3. Nếu là đăng ký Tổ chức, cập nhật OWNER ID cho Organization
+    if (isOrgRegister && user) {
+      const newOrg = await tx.organization.create({
+        data: { name: dto.organizationName!, ownerId: user.id },
       });
-
-      // 3. Gán user vào organization
       await tx.user.update({
-        where: { id: user.id },
-        data: {
-          organizationId: organization.id,
+        where: {
+          id: user.id,
         },
+        data: { organizationId: newOrg.id },
       });
     }
 
@@ -289,9 +347,11 @@ export async function getAllUsers(queryParams: { [key: string]: any }) {
   const skip = (page - 1) * size;
 
   // 2. Xây dựng điều kiện WHERE (Filters)
+  // Sử dụng Prisma.UserWhereInput để đảm bảo kiểu dữ liệu chính xác
   const where: Prisma.UserWhereInput = {};
 
   // Các trường lọc hợp lệ của model User
+  // Thêm lọc theo Organization ID nếu cần thiết
   const validFilterFields = ["email", "name"];
 
   for (const key of validFilterFields) {
@@ -308,6 +368,7 @@ export async function getAllUsers(queryParams: { [key: string]: any }) {
 
   // 3. Xây dựng ORDER BY (Sorting)
   let orderBy: Prisma.UserOrderByWithRelationInput = { createdAt: "desc" }; // Mặc định sắp xếp theo ngày tạo
+  // (Bạn có thể bổ sung logic sắp xếp ở đây nếu cần)
 
   // 4. Sử dụng Transaction
   const [data, totalCount] = await prisma.$transaction([
@@ -329,8 +390,17 @@ export async function getAllUsers(queryParams: { [key: string]: any }) {
           },
         },
         createdAt: true,
-        // Lấy thêm Role
-        roles: true,
+        // CẬP NHẬT SELECT ROLE: Phải JOIN lồng nhau để lấy TÊN VAI TRÒ
+        roles: {
+          select: {
+            role: {
+              // Đi qua quan hệ 'role' trong UserRole
+              select: {
+                name: true, // Lấy tên (name) của vai trò
+              },
+            },
+          },
+        },
       },
     }),
 
@@ -340,10 +410,16 @@ export async function getAllUsers(queryParams: { [key: string]: any }) {
   ]);
 
   const totalPages = Math.ceil(totalCount / size);
+
+  // 5. Ánh xạ kết quả
   const content = data.map((user) => {
+    // Tách roles và organization ra khỏi đối tượng user
     const { roles, organization, ...rest } = user;
 
-    const roleNames = roles.map((r) => r.roleName);
+    // CẬP NHẬT ÁNH XẠ ROLE: Lấy tên vai trò từ cấu trúc mới
+    const roleNames = roles.map((userRole) => userRole.role.name);
+
+    // Lấy thông tin tổ chức
     const organizationName = organization?.name || null;
     const organizationId = organization?.id || null;
 
@@ -355,6 +431,7 @@ export async function getAllUsers(queryParams: { [key: string]: any }) {
     };
   });
 
+  // 6. Trả về kết quả phân trang
   return {
     content,
     meta: {
@@ -403,7 +480,11 @@ export async function handleLogin(dto: LoginDto) {
   const user = await prisma.user.findUnique({
     where: { email: dto.email },
     include: {
-      roles: true,
+      roles: {
+        include: {
+          role: true,
+        },
+      },
       organization: true,
     },
   });
@@ -424,7 +505,7 @@ export async function handleLogin(dto: LoginDto) {
   }
 
   // 5. Trường hợp nhập đúng thông tin tài khoản, tạo token và trả về cho phía Client
-  const roleNames = user.roles.map((r) => r.roleName);
+  const roleNames = user.roles.map((userRole) => userRole.role.name);
   const permissions = await getUserPermissions(user.id);
   const userInfo = {
     id: user.id,
@@ -455,6 +536,7 @@ async function checkUserExists(id: number): Promise<boolean> {
 }
 
 export async function getUserById(id: number) {
+  // 1. Tìm kiếm User theo ID
   const user = await prisma.user.findUnique({
     where: { id: id },
     select: {
@@ -465,17 +547,32 @@ export async function getUserById(id: number) {
       organizationId: true,
       roles: {
         select: {
-          roleName: true,
+          role: {
+            // Đi qua quan hệ 'role' trong UserRole
+            select: {
+              name: true, // Lấy tên (name) của vai trò
+            },
+          },
         },
       },
     },
   });
+
+  // 2. Kiểm tra sự tồn tại của User
   if (!user) {
     throw new HttpException(StatusCodes.NOT_FOUND, "Người dùng không tìm thấy");
   }
+
+  // 3. Xử lý và trả về dữ liệu
+  const roles = user.roles.map((userRole) => userRole.role.name);
+
   return {
-    ...user,
-    roles: user?.roles.map((r) => r.roleName) ?? [],
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    status: user.status,
+    organizationId: user.organizationId,
+    roles: roles,
   };
 }
 
@@ -485,35 +582,60 @@ export async function updateUser(id: number, dto: Partial<UpdateUserDto>) {
     throw new HttpException(StatusCodes.NOT_FOUND, "Người dùng không tìm thấy");
   }
 
-  // Validate roles nếu truyền vào
+  // Khởi tạo mảng Role ID cần gán
+  let roleIdsToAssign: number[] | undefined;
+
+  // 1. Validate roles nếu truyền vào (CẦN LẤY ID)
   if (dto.roles && dto.roles.length > 0) {
+    // Tìm kiếm các Role dựa trên tên và lấy cả ID
     const roles = await prisma.role.findMany({
       where: { name: { in: dto.roles } },
-      select: { name: true },
+      select: { id: true, name: true }, // Lấy cả ID và NAME
     });
 
-    const validRoles = roles.map((r) => r.name);
+    const validRolesCount = roles.length;
 
-    if (validRoles.length !== dto.roles.length) {
-      throw new HttpException(StatusCodes.BAD_REQUEST, "Một hoặc nhiều role không hợp lệ");
+    if (validRolesCount !== dto.roles.length) {
+      // Xác định tên vai trò không hợp lệ để thông báo chi tiết hơn
+      const foundNames = roles.map((r) => r.name);
+      const invalidRoles = dto.roles.filter((name) => !foundNames.includes(name));
+
+      throw new HttpException(
+        StatusCodes.BAD_REQUEST,
+        `Một hoặc nhiều role không hợp lệ: ${invalidRoles.join(", ")}`
+      );
     }
+
+    // Lưu lại danh sách ID của các vai trò hợp lệ
+    roleIdsToAssign = roles.map((r) => r.id);
   }
 
   return prisma.$transaction(async (tx) => {
-    // ---- UPDATE USER NAME ----
-    await tx.user.update({
-      where: { id },
-      data: { name: dto.name },
-    });
+    // ---- UPDATE USER NAME (và các trường khác nếu có) ----
+    // Chỉ cập nhật name nếu nó được truyền vào DTO
+    const updateData: any = {};
+    if (dto.name !== undefined) {
+      updateData.name = dto.name;
+    }
+    // Bạn có thể thêm các trường khác như status, avatar... vào đây
 
-    // ---- UPDATE USER ROLES ----
-    if (dto.roles) {
+    if (Object.keys(updateData).length > 0) {
+      await tx.user.update({
+        where: { id },
+        data: updateData,
+      });
+    }
+
+    // ---- UPDATE USER ROLES (Sử dụng Role ID) ----
+    if (roleIdsToAssign) {
+      // 1. Xóa tất cả UserRole cũ của người dùng này
       await tx.userRole.deleteMany({ where: { userId: id } });
 
+      // 2. Tạo các UserRole mới bằng Role ID
       await tx.userRole.createMany({
-        data: dto.roles.map((roleName) => ({
+        data: roleIdsToAssign.map((roleId) => ({
           userId: id,
-          roleName,
+          roleId: roleId, // Sử dụng Role ID
         })),
         skipDuplicates: true,
       });
@@ -529,17 +651,38 @@ export async function updateUser(id: number, dto: Partial<UpdateUserDto>) {
         status: true,
         createdAt: true,
         organizationId: true,
+        // Cập nhật select để lấy TÊN VAI TRÒ từ bảng Role
         roles: {
           select: {
-            roleName: true,
+            role: {
+              select: {
+                name: true, // Lấy tên vai trò
+              },
+            },
           },
         },
       },
     });
 
+    // Hàm này đảm bảo userWithRoles không phải null vì đã check ở đầu hàm
+    if (!userWithRoles) {
+      throw new HttpException(
+        StatusCodes.INTERNAL_SERVER_ERROR,
+        "Không thể lấy thông tin người dùng sau khi cập nhật."
+      );
+    }
+
+    // Ánh xạ để trả về mảng tên vai trò
+    const roleNames = userWithRoles.roles.map((userRole) => userRole.role.name);
+
     return {
-      ...userWithRoles,
-      roles: userWithRoles?.roles.map((r) => r.roleName) ?? [],
+      id: userWithRoles.id,
+      name: userWithRoles.name,
+      email: userWithRoles.email,
+      status: userWithRoles.status,
+      createdAt: userWithRoles.createdAt,
+      organizationId: userWithRoles.organizationId,
+      roles: roleNames,
     };
   });
 }

@@ -46,11 +46,17 @@ model Organization {
 
   owner User   @relation("OrganizationOwner", fields: [ownerId], references: [id])
   users User[]
+  roles Role[]
+  permissions Permission[]
 }
 
 model Role {
-  name        String  @id @db.VarChar(100) // PRIMARY KEY
+  id          Int     @id @default(autoincrement())
+  name        String
   description String? @db.Text
+
+  organizationId Int?
+  organization Organization?     @relation(fields: [organizationId], references: [id])
 
   createdAt   DateTime         @default(now()) @map("created_at")
   updatedAt   DateTime         @updatedAt @map("updated_at")
@@ -61,11 +67,19 @@ model Role {
   // Hierarchical RBAC - Role Inheritance
   inheritsFrom RoleInheritance[] @relation("InheritsFrom")
   inheritedBy  RoleInheritance[] @relation("InheritedBy")
+ 
+
+  @@unique([organizationId, name]) // role không trùng trong 1 org
 }
 
 model Permission {
-  name        String               @id @db.VarChar(100) // PRIMARY KEY
+  id          Int                  @id @default(autoincrement())
+  name        String               @unique
   description String?              @db.Text
+
+  organizationId Int?
+  organization Organization?     @relation(fields: [organizationId], references: [id])
+
   endpoints   EndpointPermission[] // Một Permission có thể được dùng cho nhiều endpoint
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -75,26 +89,25 @@ model Permission {
 }
 
 model RolePermission {
-  roleName       String @map("role_name")
-  permissionName String @map("permission_name")
+  roleId       Int
+  permissionId Int
 
-  role       Role       @relation(fields: [roleName], references: [name])
-  permission Permission @relation(fields: [permissionName], references: [name])
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@id([roleName, permissionName])
+  @@id([roleId, permissionId])
   @@map("role_permissions")
 }
 
-// ✨ MODEL MỚI CHO ROLE INHERITANCE
 model RoleInheritance {
-  parentId String @map("parent_role_name") // Role cha (được kế thừa)
-  childId  String @map("child_role_name") // Role con (kế thừa)
+  parentId Int
+  childId  Int
 
-  parent Role @relation("InheritedBy", fields: [parentId], references: [name])
-  child  Role @relation("InheritsFrom", fields: [childId], references: [name])
+  parent Role @relation("InheritedBy", fields: [parentId], references: [id])
+  child  Role @relation("InheritsFrom", fields: [childId], references: [id])
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -125,16 +138,16 @@ model User {
 }
 
 model UserRole {
-  userId   Int    @map("user_id")
-  roleName String @map("role_name")
+  userId Int
+  roleId Int
 
   user User @relation(fields: [userId], references: [id])
-  role Role @relation(fields: [roleName], references: [name])
+  role Role @relation(fields: [roleId], references: [id])
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@id([userId, roleName])
+  @@id([userId, roleId])
   @@map("user_roles")
 }
 

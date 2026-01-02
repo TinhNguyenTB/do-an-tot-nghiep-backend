@@ -27,41 +27,41 @@ const getRoles = wrapAsync(async (req: Request, res: Response) => {
 });
 
 // // --- READ ONE ---
-const getRoleByName = wrapAsync(async (req: Request, res: Response) => {
-  const name = req.params.name;
-  logger.info(`Fetching role ${name}...`);
+const getRoleById = wrapAsync(async (req: Request, res: Response) => {
+  const id = req.params.id;
+  logger.info(`Fetching role ${id}...`);
 
-  const role = await roleService.getRoleDetail(name);
+  const role = await roleService.getRoleDetail(+id);
 
-  res.locals.message = `Lấy role ${name} thành công.`;
+  res.locals.message = `Lấy role ${id} thành công.`;
   res.status(StatusCodes.OK).json(role);
 });
 
 // // --- UPDATE ---
 const updateRole = wrapAsync(async (req: Request, res: Response) => {
-  const name = req.params.name;
-  logger.info(`Updating role ${name}...`);
+  const id = req.params.id;
+  logger.info(`Updating role ${id}...`);
 
   const dto = req.body as UpdateRoleDto;
 
-  const updatedRole = await roleService.handleUpdateRole(name, dto);
-  res.locals.message = `Cập nhật role: ${name} thành công.`;
+  const updatedRole = await roleService.handleUpdateRole(+id, dto);
+  res.locals.message = `Cập nhật role: ${id} thành công.`;
   res.status(StatusCodes.OK).json(updatedRole);
 });
 
 // // --- DELETE ---
 const deleteRole = wrapAsync(async (req: Request, res: Response) => {
-  const name = req.params.name;
-  logger.info(`Deleting role ${name}...`);
+  const id = req.params.id;
+  logger.info(`Deleting role ${id}...`);
 
-  await roleService.handleDeleteRole(name);
+  await roleService.handleDeleteRole(+id);
   res.status(StatusCodes.NO_CONTENT).send(); // Phản hồi 204 No Content
 });
 
 export const roleController = {
   getRoles,
   createRole,
-  getRoleByName,
+  getRoleById,
   updateRole,
   deleteRole,
 };

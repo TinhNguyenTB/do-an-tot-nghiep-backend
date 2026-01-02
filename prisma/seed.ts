@@ -2,160 +2,373 @@ import * as bcrypt from "bcrypt";
 import prisma from "../src/prismaClient";
 import { UserStatus } from "@prisma/client";
 
-const SYSTEM_PERMISSIONS = [
-  // SUBSCRIPTIONS
-  "read_subscriptions",
-  "read_subscriptions_details",
-  "update_subscriptions",
-  "create_subscriptions",
-  "delete_subscriptions",
-  // USERS
-  "read_users",
-  "create_users",
-  "read_users_details",
-  "update_users",
-  "delete_users",
-  // ROLES
-  "read_roles",
-  "read_roles_details",
-  "create_roles",
-  "update_roles",
-  "delete_roles",
-  // PERMISSIONS (Tự quản lý)
-  "read_permissions",
-  "read_permissions_details",
-  "create_permissions",
-  "update_permissions",
-  "delete_permissions",
-  // ORGANIZATIONS
-  "read_organizations",
-  "read_organization_details",
-  "update_organizations",
-  "create_organizations",
-  "delete_organizations",
-  // ENDPOINT-PERMISSION
-  "read_endpoint_permissions",
-  "read_endpoint_permissions_details",
-  "create_endpoint_permissions",
-  "update_endpoint_permissions",
-  "delete_endpoint_permissions",
+/* =======================
+   PERMISSIONS - Toàn cục (Global)
+======================= */
+const GLOBAL_PERMISSIONS_NAMES = [
+  // System Management (SA)
+  "system:manage_users",
+  "system:manage_roles",
+  "system:manage_permissions",
+  "system:manage_subscriptions",
+
+  // Org-scoped Actions (có thể áp dụng cho cả SA và Org Admin)
+  "org:read_members",
+  "org:invite_members",
+  "org:remove_members",
+  "org:update_member_roles",
+  "org:manage_billing",
+
+  // Self-Management
+  "change_self_password",
+  "update_self_profile",
+
+  // App Usage
+  "app:read_content",
+  "app:write_content",
 ];
 
-const MOCK_ROLES = [
-  {
-    name: "client",
-    permissions: [
-      "change_self_password",
-      "read_subscriptions",
-      "read_self_subscription", // Quyền xem gói dịch vụ hiện tại của bản thân
-      "update_self_profile", // Quyền cập nhật thông tin cá nhân
-      "read_self_payments", // Xem lịch sử thanh toán
-    ],
-    inherits: [],
-  },
-  {
-    name: "org_admin",
-    permissions: [
-      "manage_organization_users", // Quản lý người dùng trong Org
-
-      // Quản lý Tổ chức và Thanh toán
-      "read_self_organization", // Xem thông tin chi tiết Tổ chức
-      "update_self_organization", // Cập nhật thông tin Tổ chức
-    ],
-    inherits: ["client"], // Kế thừa các quyền cơ bản của client
-  },
-  {
-    name: "super_admin",
-    permissions: [],
-    inherits: [],
-  },
-];
-
+/* =======================
+   MAIN
+======================= */
 async function main() {
-  console.log(`Bắt đầu Seed...`);
+  console.log("Start seeding...");
 
-  const allPermissions = new Set<string>();
+  /* =======================
+     CLEAN DATABASE
+  ======================= */
+  console.log("Cleaning existing data...");
+  await prisma.$transaction([
+    prisma.passwordResetToken.deleteMany(),
+    prisma.userSubscription.deleteMany(),
+    prisma.stripeCustomer.deleteMany(),
+    prisma.payment.deleteMany(),
+    prisma.subscription.deleteMany(),
+    prisma.userRole.deleteMany(),
+    prisma.roleInheritance.deleteMany(),
+    prisma.rolePermission.deleteMany(),
+    prisma.endpointPermission.deleteMany(),
+    prisma.user.deleteMany(),
+    prisma.organization.deleteMany(),
+    prisma.role.deleteMany(),
+    prisma.permission.deleteMany(),
+  ]);
 
-  // ✨ FIX: Đảm bảo các quyền chung (SYSTEM_PERMISSIONS) được thêm vào
-  SYSTEM_PERMISSIONS.forEach((perm) => allPermissions.add(perm));
-
-  // --- 1. Lấy danh sách tất cả các Permissions DUY NHẤT ---
-  MOCK_ROLES.forEach((role) => {
-    role.permissions.forEach((perm) => allPermissions.add(perm));
-  });
-
-  const permissionData = Array.from(allPermissions).map((name) => ({
-    name,
-    description: `Quyền cho phép: ${name.replace(/_/g, " ")}`,
-  }));
-
-  // --- 2. Xóa dữ liệu cũ (Tùy chọn: cần thận trọng trong môi trường Production!) ---
-  await prisma.userSubscription.deleteMany({});
-  await prisma.endpointPermission.deleteMany({});
-  await prisma.payment.deleteMany({});
-  await prisma.userRole.deleteMany({});
-  await prisma.roleInheritance.deleteMany({});
-  await prisma.rolePermission.deleteMany({});
-  await prisma.organization.deleteMany({});
-  await prisma.user.deleteMany({});
-  await prisma.role.deleteMany({});
-  await prisma.permission.deleteMany({});
-  await prisma.subscription.deleteMany({});
-
-  await prisma.stripeCustomer.deleteMany({});
-  console.log("Đã xóa dữ liệu cũ.");
-
-  // --- 3. Seed Permissions ---
+  /* =======================
+     1. TẠO TẤT CẢ GLOBAL PERMISSIONS
+  ======================= */
+  console.log("1. Creating Global Permissions...");
   await prisma.permission.createMany({
-    data: permissionData,
+    data: GLOBAL_PERMISSIONS_NAMES.map((name) => ({
+      name,
+      description: `Global Permission: ${name.replace(/_/g, " ")}`,
+      organizationId: null, // GLOBAL
+    })),
     skipDuplicates: true,
   });
-  console.log(`Đã tạo ${permissionData.length} Permissions.`);
 
-  // --- 4. Seed Roles ---
-  const roleData = MOCK_ROLES.map((role) => ({
-    name: role.name,
-    description: `Vai trò ${role.name}`,
-  }));
-  await prisma.role.createMany({
-    data: roleData,
+  const allGlobalPermissions = await prisma.permission.findMany({
+    where: { organizationId: null },
+  });
+  const getPermissionId = (name: string) => allGlobalPermissions.find((p) => p.name === name)?.id;
+  const orgActionIds = GLOBAL_PERMISSIONS_NAMES.filter(
+    (name) =>
+      name.startsWith("org:") ||
+      name.startsWith("app:") ||
+      name.startsWith("change_self") ||
+      name.startsWith("update_self")
+  )
+    .map((name) => getPermissionId(name)!)
+    .filter((id) => id !== undefined) as number[];
+
+  /* =======================
+     1.5. TẠO ENDPOINT PERMISSIONS
+     (Sử dụng các Global Permission vừa tạo)
+  ======================= */
+  console.log("1.5. Creating Endpoint Permissions...");
+
+  const endpointPermissionsData = [
+    // USER & AUTH
+    {
+      httpMethod: "POST",
+      endpoint: "/api/v1/auth/password",
+      permissionName: "change_self_password",
+    },
+    { httpMethod: "PATCH", endpoint: "/api/v1/users/me", permissionName: "update_self_profile" },
+    // ORGANIZATION MEMBERSHIP (Dùng cho cả Org Admin và SA)
+    { httpMethod: "GET", endpoint: "/api/v1/orgs/:id/members", permissionName: "org:read_members" },
+    {
+      httpMethod: "POST",
+      endpoint: "/api/v1/orgs/:id/members",
+      permissionName: "org:invite_members",
+    },
+    {
+      httpMethod: "DELETE",
+      endpoint: "/api/v1/orgs/:id/members/:memberId",
+      permissionName: "org:remove_members",
+    },
+    {
+      httpMethod: "PATCH",
+      endpoint: "/api/v1/orgs/:id/members/:memberId/role",
+      permissionName: "org:update_member_roles",
+    },
+    // SYSTEM ADMIN ACTIONS (Chỉ SA mới có)
+    {
+      httpMethod: "PATCH",
+      endpoint: "/api/v1/system/users/:id/status",
+      permissionName: "system:manage_users",
+    },
+    { httpMethod: "POST", endpoint: "/api/v1/system/roles", permissionName: "system:manage_roles" },
+    // APP USAGE
+    { httpMethod: "GET", endpoint: "/api/v1/data", permissionName: "app:read_content" },
+  ];
+
+  await prisma.endpointPermission.createMany({
+    data: endpointPermissionsData,
     skipDuplicates: true,
   });
-  console.log(`Đã tạo ${roleData.length} Roles.`);
 
-  // --- 5. Seed RolePermissions (Gán quyền trực tiếp) ---
-  const rolePermissionsData: { roleName: string; permissionName: string }[] = [];
-  MOCK_ROLES.forEach((role) => {
-    role.permissions.forEach((permName) => {
-      rolePermissionsData.push({
-        roleName: role.name,
-        permissionName: permName,
-      });
-    });
+  /* =======================
+     2. TẠO SYSTEM ROLES (GLOBAL)
+  ======================= */
+  console.log("2. Creating System Roles...");
+  const superAdminRole = await prisma.role.create({
+    data: {
+      name: "super_admin",
+      description: "System Super Admin (Global Role)",
+      organizationId: null,
+    },
   });
+
+  const clientRole = await prisma.role.create({
+    data: {
+      name: "client",
+      description: "Standalone Client/Base User (Global Role)",
+      organizationId: null,
+    },
+  });
+
+  /* =======================
+     3. SYSTEM ROLE PERMISSIONS
+  ======================= */
+  console.log("3. Assigning Permissions to System Roles...");
+
+  // Super Admin: có tất cả các quyền Global
   await prisma.rolePermission.createMany({
-    data: rolePermissionsData,
+    data: allGlobalPermissions.map((p) => ({
+      roleId: superAdminRole.id,
+      permissionId: p.id,
+    })),
     skipDuplicates: true,
   });
-  console.log(`Đã tạo ${rolePermissionsData.length} RolePermissions.`);
 
-  // --- 6. Seed RoleInheritance (Thiết lập kế thừa) ---
-  const roleInheritanceData: { parentId: string; childId: string }[] = [];
-  MOCK_ROLES.forEach((role) => {
-    role.inherits.forEach((parentRoleName) => {
-      roleInheritanceData.push({
-        parentId: parentRoleName,
-        childId: role.name,
-      });
-    });
-  });
-  await prisma.roleInheritance.createMany({
-    data: roleInheritanceData,
+  // Client Role: chỉ có quyền tự quản lý và quyền App cơ bản
+  const clientPermissionIds = allGlobalPermissions
+    .filter(
+      (p) =>
+        p.name === "change_self_password" ||
+        p.name === "update_self_profile" ||
+        p.name === "app:read_content" ||
+        p.name === "app:write_content"
+    )
+    .map((p) => p.id);
+
+  await prisma.rolePermission.createMany({
+    data: clientPermissionIds.map((pId) => ({
+      roleId: clientRole.id,
+      permissionId: pId,
+    })),
     skipDuplicates: true,
   });
-  console.log(`Đã tạo ${roleInheritanceData.length} mối quan hệ Kế thừa Vai trò.`);
 
-  // --- 7. Seed Subscriptions (Gói Dịch Vụ) ---
+  /* =======================
+     4. TẠO ORGANIZATION & ORG ADMIN USER
+  ======================= */
+  console.log("4. Creating Organization and Org Owner User...");
+  const orgAdminPassword = await bcrypt.hash("password", 10);
+
+  const orgOwner = await prisma.user.create({
+    data: {
+      email: "orgowner@acme.com",
+      password: orgAdminPassword,
+      name: "Acme Org Owner",
+      status: UserStatus.ACTIVE,
+    },
+  });
+
+  const organization = await prisma.organization.create({
+    data: {
+      name: "Acme Corporation",
+      description: "Demo Organization",
+      ownerId: orgOwner.id,
+    },
+  });
+
+  await prisma.user.update({
+    where: { id: orgOwner.id },
+    data: { organizationId: organization.id },
+  });
+
+  /* =======================
+     4.5. TẠO CUSTOM PERMISSION CHO ORG (MỚI)
+     (Ví dụ: Acme muốn có quyền riêng cho riêng họ)
+  ======================= */
+  console.log("4.5. Creating Custom Org-Scoped Permissions...");
+  const customOrgPermission = await prisma.permission.create({
+    data: {
+      name: "org:manage_custom_reports",
+      description: "Quản lý các báo cáo tùy chỉnh của Acme",
+      organizationId: organization.id,
+    },
+  });
+
+  /* =======================
+     5. ORG ROLES
+  ======================= */
+  console.log("5. Creating Organization Roles...");
+
+  // Org Owner Role (Gắn với Org này)
+  const orgOwnerRole = await prisma.role.create({
+    data: {
+      name: "org_admin",
+      description: "Organization Owner",
+      organizationId: organization.id,
+    },
+  });
+
+  // Org Member Role (Gắn với Org này)
+  const orgMemberRole = await prisma.role.create({
+    data: {
+      name: "org_member",
+      description: "Organization Member",
+      organizationId: organization.id,
+    },
+  });
+
+  /* =======================
+     6. ORG ROLE PERMISSIONS
+     (Owner có quyền Global Org Action + Custom Org Permission)
+  ======================= */
+  console.log("6. Assigning Permissions to Org Roles...");
+
+  // Org Owner Role Permissions: Gồm các quyền org:xxx toàn cục + quyền tùy chỉnh
+  const ownerPermissions = [
+    ...orgActionIds, // Các quyền org:read, org:invite, app:read...
+    customOrgPermission.id, // Quyền tùy chỉnh
+  ];
+
+  await prisma.rolePermission.createMany({
+    data: ownerPermissions.map((pId) => ({
+      roleId: orgOwnerRole.id,
+      permissionId: pId,
+    })),
+    skipDuplicates: true,
+  });
+
+  // Org Member Role Permissions: Chỉ có quyền App cơ bản (đã có trong Client Role)
+  // Ta chỉ cần gán Client Role (qua Inheritance) là đủ, nhưng sẽ gán lại quyền App để minh họa
+  const memberPermissions = clientPermissionIds;
+  await prisma.rolePermission.createMany({
+    data: memberPermissions.map((pId) => ({
+      roleId: orgMemberRole.id,
+      permissionId: pId,
+    })),
+    skipDuplicates: true,
+  });
+
+  /* =======================
+     7. ROLE INHERITANCE
+     (Owner và Member kế thừa quyền cơ bản của Client)
+  ======================= */
+  console.log("7. Creating Role Inheritance...");
+  // Org Owner kế thừa Client
+  await prisma.roleInheritance.create({
+    data: {
+      parentId: clientRole.id,
+      childId: orgOwnerRole.id,
+    },
+  });
+  // Org Member kế thừa Client
+  await prisma.roleInheritance.create({
+    data: {
+      parentId: clientRole.id,
+      childId: orgMemberRole.id,
+    },
+  });
+
+  /* =======================
+     8. ASSIGN ROLES TO USERS
+  ======================= */
+  console.log("8. Assigning Roles to users...");
+
+  // Org Owner User
+  await prisma.userRole.create({
+    data: {
+      userId: orgOwner.id,
+      roleId: orgOwnerRole.id,
+    },
+  });
+
+  /* =======================
+     9. SUPER ADMIN USER
+  ======================= */
+  const superAdmin = await prisma.user.create({
+    data: {
+      email: "superadmin@gmail.com",
+      password: orgAdminPassword,
+      name: "System Super Admin",
+      status: UserStatus.ACTIVE,
+    },
+  });
+
+  await prisma.userRole.create({
+    data: {
+      userId: superAdmin.id,
+      roleId: superAdminRole.id,
+    },
+  });
+
+  /* =======================
+     10. CLIENT USER (Lẻ)
+  ======================= */
+  const client = await prisma.user.create({
+    data: {
+      email: "client@gmail.com",
+      password: orgAdminPassword,
+      name: "Standalone Client User",
+      status: UserStatus.ACTIVE,
+    },
+  });
+
+  await prisma.userRole.create({
+    data: {
+      userId: client.id,
+      roleId: clientRole.id,
+    },
+  });
+
+  /* =======================
+     11. ORG MEMBER USER
+  ======================= */
+  const orgMember = await prisma.user.create({
+    data: {
+      email: "orgmember@acme.com",
+      password: orgAdminPassword,
+      name: "Acme Org Member",
+      status: UserStatus.ACTIVE,
+      organizationId: organization.id,
+    },
+  });
+
+  await prisma.userRole.create({
+    data: {
+      userId: orgMember.id,
+      roleId: orgMemberRole.id,
+    },
+  });
+
+  // TẠO SUBSCRIPTION MẪU
+
   const subscriptionData = [
     // PERSONAL
     {
@@ -200,7 +413,7 @@ async function main() {
     },
   ];
 
-  const subscriptions = await Promise.all(
+  await Promise.all(
     subscriptionData.map((data) =>
       prisma.subscription.upsert({
         where: { name: data.name },
@@ -209,211 +422,11 @@ async function main() {
       })
     )
   );
-  console.log(`Đã tạo ${subscriptions.length} Gói Dịch Vụ (Subscriptions).`);
 
-  // --------------------------------------------------------------------------------
-  // --- 8. Seed User & Organization (Tạo 3 User mẫu) ---
-  // --------------------------------------------------------------------------------
-
-  // 🔑 BƯỚC HASH MẬT KHẨU CHUNG
-  const plainPassword = "password"; // Mật khẩu chung cho cả 3 user
-  const hashedPassword = await bcrypt.hash(plainPassword, 10);
-
-  const superAdmin = await prisma.user.create({
-    data: {
-      email: "superadmin@gmail.com",
-      password: hashedPassword,
-      name: "Super Admin",
-      status: UserStatus.ACTIVE,
-    },
-  });
-
-  await prisma.userRole.create({
-    data: {
-      userId: superAdmin.id,
-      roleName: "super_admin",
-    },
-  });
-
-  console.log(`Đã tạo Super Admin: ${superAdmin.email}`);
-
-  const orgAdmin = await prisma.user.create({
-    data: {
-      email: "orgadmin@gmail.com",
-      password: hashedPassword,
-      name: "Org Admin",
-      status: UserStatus.ACTIVE,
-    },
-  });
-
-  await prisma.userRole.create({
-    data: {
-      userId: orgAdmin.id,
-      roleName: "org_admin",
-    },
-  });
-
-  console.log(`Đã tạo Org Admin: ${orgAdmin.email}`);
-
-  const org = await prisma.organization.create({
-    data: {
-      name: "Acme Corporation",
-      description: "Tổ chức mẫu",
-      ownerId: orgAdmin.id,
-    },
-  });
-
-  console.log(`Đã tạo Organization: ${org.name} (Owner: ${orgAdmin.email})`);
-
-  await prisma.user.update({
-    where: { id: orgAdmin.id },
-    data: {
-      organizationId: org.id,
-    },
-  });
-
-  const client = await prisma.user.create({
-    data: {
-      email: "client@gmail.com",
-      password: hashedPassword,
-      name: "Client",
-      status: UserStatus.ACTIVE,
-    },
-  });
-
-  await prisma.userRole.create({
-    data: {
-      userId: client.id,
-      roleName: "client",
-    },
-  });
-
-  console.log(`Đã tạo Client: ${client.email}`);
-
-  console.log("Bắt đầu Seed Route Permissions...");
-
-  const endpointPermissionsData = [
-    // --- 1. SUBSCRIPTIONS ROUTES (QUẢN LÝ GÓI) ---
-    {
-      httpMethod: "GET",
-      endpoint: "/subscriptions",
-      permissionName: "read_subscriptions",
-    },
-    {
-      httpMethod: "GET",
-      endpoint: "/subscriptions/:id",
-      permissionName: "read_subscriptions_details",
-    },
-    {
-      httpMethod: "PATCH",
-      endpoint: "/subscriptions/:id",
-      permissionName: "update_subscriptions",
-    },
-    { httpMethod: "POST", endpoint: "/subscriptions", permissionName: "create_subscriptions" },
-    {
-      httpMethod: "DELETE",
-      endpoint: "/subscriptions/:id",
-      permissionName: "delete_subscriptions",
-    },
-
-    // --- 2. USERS ROUTES (QUẢN LÝ TẤT CẢ USER) ---
-    { httpMethod: "GET", endpoint: "/users", permissionName: "read_users" },
-    { httpMethod: "POST", endpoint: "/users", permissionName: "create_users" },
-    { httpMethod: "GET", endpoint: "/users/:id", permissionName: "read_users_details" },
-    { httpMethod: "PATCH", endpoint: "/users/:id", permissionName: "update_users" },
-    { httpMethod: "DELETE", endpoint: "/users/:id", permissionName: "delete_users" },
-    {
-      httpMethod: "PATCH",
-      endpoint: "/auth/change-password",
-      permissionName: "change_self_password",
-    },
-
-    // --- 3. ROLES ROUTES (QUẢN LÝ RBAC) ---
-    { httpMethod: "GET", endpoint: "/roles", permissionName: "read_roles" },
-    { httpMethod: "GET", endpoint: "/roles/:name", permissionName: "read_roles_details" },
-    { httpMethod: "POST", endpoint: "/roles", permissionName: "create_roles" },
-    { httpMethod: "PATCH", endpoint: "/roles/:name", permissionName: "update_roles" },
-    { httpMethod: "DELETE", endpoint: "/roles/:name", permissionName: "delete_roles" },
-
-    { httpMethod: "GET", endpoint: "/permissions", permissionName: "read_permissions" },
-    { httpMethod: "POST", endpoint: "/permissions", permissionName: "create_permissions" },
-    {
-      httpMethod: "GET",
-      endpoint: "/permissions/:name",
-      permissionName: "read_permissions_details",
-    },
-    {
-      httpMethod: "PATCH",
-      endpoint: "/permissions/:name",
-      permissionName: "update_permissions",
-    },
-    {
-      httpMethod: "DELETE",
-      endpoint: "/permissions/:name",
-      permissionName: "delete_permissions",
-    },
-
-    // --- 4. ORGANIZATION ROUTES (QUẢN LÝ TỔ CHỨC) ---
-    { httpMethod: "GET", endpoint: "/organizations", permissionName: "read_organizations" },
-    {
-      httpMethod: "GET",
-      endpoint: "/organizations/:id",
-      permissionName: "read_organization_details",
-    },
-    {
-      httpMethod: "PATCH",
-      endpoint: "/organizations/:id",
-      permissionName: "update_organizations",
-    },
-    { httpMethod: "POST", endpoint: "/organizations", permissionName: "create_organizations" },
-    {
-      httpMethod: "DELETE",
-      endpoint: "/organizations/:id",
-      permissionName: "delete_organizations",
-    },
-
-    // --- 5. ENDPOINT-PERMISSION ROUTES ---
-    {
-      httpMethod: "GET",
-      endpoint: "/endpoint-permissions",
-      permissionName: "read_endpoint_permissions",
-    },
-    {
-      httpMethod: "GET",
-      endpoint: "/endpoint-permissions/:id",
-      permissionName: "read_endpoint_permissions_details",
-    },
-    {
-      httpMethod: "POST",
-      endpoint: "/endpoint-permissions",
-      permissionName: "create_endpoint_permissions",
-    },
-    {
-      httpMethod: "PATCH",
-      endpoint: "/endpoint-permissions/:id",
-      permissionName: "update_endpoint_permissions",
-    },
-    {
-      httpMethod: "DELETE",
-      endpoint: "/endpoint-permissions/:id",
-      permissionName: "delete_endpoint_permissions",
-    },
-  ];
-
-  await prisma.endpointPermission.createMany({
-    data: endpointPermissionsData,
-    skipDuplicates: true,
-  });
-  console.log(`Đã tạo ${endpointPermissionsData.length} Endpoint Permissions.`);
-
-  console.log(`Seed hoàn tất. 🔑 Mật khẩu chung cho tất cả user là: "${plainPassword}"`);
+  console.log("✅ Seed completed");
+  console.log("🔑 Password for all users: password");
 }
 
 main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  .catch(console.error)
+  .finally(() => prisma.$disconnect());
