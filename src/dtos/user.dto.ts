@@ -34,7 +34,10 @@ export class UpdateUserDto {
   name!: string;
 
   @IsArray()
-  roles!: string[];
+  roles!: number[];
+
+  @IsString()
+  status!: string;
 }
 
 export class CreateUserDto {

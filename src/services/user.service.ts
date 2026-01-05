@@ -550,7 +550,7 @@ export async function getUserById(id: number) {
           role: {
             // Đi qua quan hệ 'role' trong UserRole
             select: {
-              name: true, // Lấy tên (name) của vai trò
+              id: true,
             },
           },
         },
@@ -564,7 +564,7 @@ export async function getUserById(id: number) {
   }
 
   // 3. Xử lý và trả về dữ liệu
-  const roles = user.roles.map((userRole) => userRole.role.name);
+  const roles = user.roles.map((userRole) => userRole.role.id);
 
   return {
     id: user.id,
@@ -587,9 +587,9 @@ export async function updateUser(id: number, dto: Partial<UpdateUserDto>) {
 
   // 1. Validate roles nếu truyền vào (CẦN LẤY ID)
   if (dto.roles && dto.roles.length > 0) {
-    // Tìm kiếm các Role dựa trên tên và lấy cả ID
+    // Tìm kiếm các Role dựa trên ID
     const roles = await prisma.role.findMany({
-      where: { name: { in: dto.roles } },
+      where: { id: { in: dto.roles } },
       select: { id: true, name: true }, // Lấy cả ID và NAME
     });
 
@@ -597,8 +597,8 @@ export async function updateUser(id: number, dto: Partial<UpdateUserDto>) {
 
     if (validRolesCount !== dto.roles.length) {
       // Xác định tên vai trò không hợp lệ để thông báo chi tiết hơn
-      const foundNames = roles.map((r) => r.name);
-      const invalidRoles = dto.roles.filter((name) => !foundNames.includes(name));
+      const foundNames = roles.map((r) => r.id);
+      const invalidRoles = dto.roles.filter((id) => !foundNames.includes(id));
 
       throw new HttpException(
         StatusCodes.BAD_REQUEST,
@@ -617,7 +617,9 @@ export async function updateUser(id: number, dto: Partial<UpdateUserDto>) {
     if (dto.name !== undefined) {
       updateData.name = dto.name;
     }
-    // Bạn có thể thêm các trường khác như status, avatar... vào đây
+    if (dto.status !== undefined) {
+      updateData.status = dto.status;
+    }
 
     if (Object.keys(updateData).length > 0) {
       await tx.user.update({

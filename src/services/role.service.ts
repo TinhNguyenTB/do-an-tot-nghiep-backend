@@ -1,7 +1,7 @@
 import { CreateRoleDto, UpdateRoleDto } from "@/dtos/role.dto";
 import { HttpException } from "@/exceptions/http-exception";
 import prisma from "@/prismaClient";
-import { Prisma } from "@prisma/client";
+import { Permission, Prisma } from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 
 // --- READ ALL ---
@@ -27,28 +27,21 @@ export async function getAllRoles(queryParams: { [key: string]: any }) {
       orderBy: { createdAt: "desc" },
       where,
       select: {
+        id: true,
         name: true,
         description: true,
 
         // Role này kế thừa từ role nào?
         inheritsFrom: {
           select: {
-            parent: {
-              select: {
-                name: true,
-              },
-            },
+            parent: true,
           },
         },
 
         // Những role nào kế thừa role này?
         inheritedBy: {
           select: {
-            child: {
-              select: {
-                name: true,
-              },
-            },
+            child: true,
           },
         },
       },
@@ -63,8 +56,14 @@ export async function getAllRoles(queryParams: { [key: string]: any }) {
 
   const roles = data.map((role) => ({
     ...role,
-    inheritsFrom: role.inheritsFrom.map((i) => i.parent.name),
-    inheritedBy: role.inheritedBy.map((i) => i.child.name),
+    inheritsFrom: role.inheritsFrom.map((i) => ({
+      id: i.parent.id,
+      name: i.parent.name,
+    })),
+    inheritedBy: role.inheritedBy.map((i) => ({
+      id: i.child.id,
+      name: i.child.name,
+    })),
   }));
 
   return {
@@ -105,14 +104,6 @@ export const getRoleDetail = async (roleId: number) => {
           },
         },
       },
-      // Lấy trực tiếp các quyền được gán cho role này
-      permissions: {
-        select: {
-          permission: {
-            select: { id: true, name: true, description: true },
-          },
-        },
-      },
     },
   });
 
@@ -122,19 +113,13 @@ export const getRoleDetail = async (roleId: number) => {
 
   // 2. (Tùy chọn) Lấy toàn bộ permission name (kể cả kế thừa)
   // Nếu bạn muốn hiển thị TẤT CẢ quyền hiệu quả (bao gồm kế thừa), hãy sử dụng hàm đã sửa:
-  const effectivePermissionNames = await getAllPermissionsOfRole(roleId);
+  const effectivePermissions = await getAllPermissionsOfRole(roleId);
 
   // 3. Chuẩn hóa dữ liệu trả về
 
   // Lấy danh sách Role cha/con
-  const inheritsFrom = role.inheritsFrom.map((i) => ({
-    id: i.parent.id,
-    name: i.parent.name,
-  }));
-  const inheritedBy = role.inheritedBy.map((i) => ({
-    id: i.child.id,
-    name: i.child.name,
-  }));
+  const inheritsFrom = role.inheritsFrom.map((i) => i.parent.id);
+  const inheritedBy = role.inheritedBy.map((i) => i.child.id);
 
   return {
     id: role.id,
@@ -143,7 +128,7 @@ export const getRoleDetail = async (roleId: number) => {
     organizationId: role.organizationId,
     inheritsFrom: inheritsFrom, // Mảng { id, name }
     inheritedBy: inheritedBy, // Mảng { id, name }
-    permissions: Array.from(effectivePermissionNames),
+    permissions: Array.from(effectivePermissions),
   };
 };
 
@@ -363,26 +348,23 @@ export const handleCreateRole = async (payload: CreateRoleDto) => {
 export async function getAllPermissionsOfRole(
   roleId: number,
   visitedRoleIds = new Set<number>()
-): Promise<Set<string>> {
+): Promise<Set<Permission>> {
   // 1. Tránh vòng lặp
   if (visitedRoleIds.has(roleId)) return new Set();
   visitedRoleIds.add(roleId);
 
-  const permissions = new Set<string>();
+  const permissions = new Set<Permission>();
 
   // 2. Permission trực tiếp (Direct Permissions)
   // Phải JOIN qua RolePermission để lấy tên quyền từ bảng Permission
   const directPermissions = await prisma.rolePermission.findMany({
     where: { roleId: roleId },
     select: {
-      permission: {
-        // JOIN tới bảng Permission
-        select: { name: true }, // Lấy tên quyền (name)
-      },
+      permission: true,
     },
   });
 
-  directPermissions.forEach((rp) => permissions.add(rp.permission.name));
+  directPermissions.forEach((rp) => permissions.add(rp.permission));
 
   // 3. Role cha (Parent Roles)
   const parents = await prisma.roleInheritance.findMany({

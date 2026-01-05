@@ -37,6 +37,7 @@ export async function getAllPermissions(queryParams: { [key: string]: any }) {
       orderBy: { createdAt: "desc" },
       where,
       select: {
+        id: true,
         name: true,
         description: true,
       },
