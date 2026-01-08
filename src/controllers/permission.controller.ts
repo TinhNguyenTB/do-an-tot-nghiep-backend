@@ -3,6 +3,7 @@ import { logger } from "@/utils/logger";
 import { wrapAsync } from "@/utils/wrapAsync";
 import { StatusCodes } from "http-status-codes";
 import * as permissionService from "@/services/permission.service";
+import { CreatePermissionDto, UpdatePermissionDto } from "@/dtos/permission.dto";
 
 const getPermissions = wrapAsync(async (req: Request, res: Response) => {
   logger.info("Fetching all permissions with query params...");
@@ -14,31 +15,42 @@ const getPermissions = wrapAsync(async (req: Request, res: Response) => {
   res.status(StatusCodes.OK).json(result);
 });
 
-// // --- READ ONE ---
-// const getSubscription = wrapAsync(async (req: Request, res: Response) => {
-//   const id = Number(req.params.id);
-//   const sub = await subService.getSubscriptionById(id);
-//   res.locals.message = `Lấy gói dịch vụ ID: ${id} thành công.`;
-//   res.status(StatusCodes.OK).json(sub);
-// });
+const createNewPermission = wrapAsync(async (req: Request, res: Response) => {
+  logger.info("Creating new permission...");
 
-// // --- UPDATE ---
-// const updateSubscription = wrapAsync(async (req: Request, res: Response) => {
-//   const id = Number(req.params.id);
-//   const dto = req.body as Partial<CreateSubscriptionDto>;
+  const dto = req.body as CreatePermissionDto;
+  const result = await permissionService.createPermission(dto);
 
-//   const updatedSub = await subService.updateSubscription(id, dto);
-//   res.locals.message = `Cập nhật gói dịch vụ ID: ${id} thành công.`;
-//   res.status(StatusCodes.OK).json(updatedSub);
-// });
+  res.locals.message = "Thêm quyền thành công.";
+  res.status(StatusCodes.OK).json(result);
+});
 
-// // --- DELETE ---
-// const deleteSubscription = wrapAsync(async (req: Request, res: Response) => {
-//   const id = Number(req.params.id);
-//   await subService.deleteSubscription(id);
-//   res.status(StatusCodes.NO_CONTENT).send(); // Phản hồi 204 No Content
-// });
+const getPermissionById = wrapAsync(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const sub = await permissionService.getPermissionDetail(id);
+  res.locals.message = `Lấy gói quyền ID: ${id} thành công.`;
+  res.status(StatusCodes.OK).json(sub);
+});
+
+const updatePermission = wrapAsync(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const dto = req.body as UpdatePermissionDto;
+
+  const updatedSub = await permissionService.handleUpdatePermission(id, dto);
+  res.locals.message = `Cập nhật quyền ID: ${id} thành công.`;
+  res.status(StatusCodes.OK).json(updatedSub);
+});
+
+const deletePermissionById = wrapAsync(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  await permissionService.deletePermission(id);
+  res.status(StatusCodes.NO_CONTENT).send(); // Phản hồi 204 No Content
+});
 
 export const permissionController = {
   getPermissions,
+  createNewPermission,
+  updatePermission,
+  getPermissionById,
+  deletePermissionById,
 };

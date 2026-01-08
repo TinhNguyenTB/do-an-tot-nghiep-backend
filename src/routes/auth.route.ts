@@ -25,7 +25,7 @@ router.put("/auth/refresh", userController.refreshToken);
 router.patch(
   "/auth/change-password",
   authMiddleware,
-  rbacMiddleware,
+  // rbacMiddleware,
   ValidationPipe(ChangePasswordDto),
   userController.changePassword
 );
@@ -34,7 +34,7 @@ router.get("/auth/profile", authMiddleware, userController.getProfile);
 
 router.patch(
   "/auth/profile",
-  authMiddleware,
+  // authMiddleware,
   ValidationPipe(UpdateProfileDto),
   authController.updateProfile
 );

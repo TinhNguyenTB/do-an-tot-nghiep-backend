@@ -9,7 +9,7 @@ const router = Router();
 router.get(
   "/organizations",
   authMiddleware,
-  rbacMiddleware,
+  // rbacMiddleware,
   organizationController.getOrganizations
 );
 

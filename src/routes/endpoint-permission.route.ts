@@ -9,7 +9,7 @@ const router = Router();
 router.get(
   "/endpoint-permissions",
   authMiddleware,
-  rbacMiddleware,
+  // rbacMiddleware,
   endpointPermissionController.getEndpointPermissions
 );
 

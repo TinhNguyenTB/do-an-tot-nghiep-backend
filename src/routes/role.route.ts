@@ -7,20 +7,40 @@ import { CreateRoleDto } from "@/dtos/role.dto";
 
 const router = Router();
 
-router.get("/roles", authMiddleware, rbacMiddleware, roleController.getRoles);
+router.get(
+  "/roles",
+  authMiddleware,
+  // rbacMiddleware,
+  roleController.getRoles
+);
 
-router.get("/roles/:id", authMiddleware, rbacMiddleware, roleController.getRoleById);
+router.get(
+  "/roles/:id",
+  authMiddleware,
+  // rbacMiddleware,
+  roleController.getRoleById
+);
 
 router.post(
   "/roles",
   authMiddleware,
-  rbacMiddleware,
+  // rbacMiddleware,
   ValidationPipe(CreateRoleDto),
   roleController.createRole
 );
 
-router.patch("/roles/:id", authMiddleware, rbacMiddleware, roleController.updateRole);
+router.patch(
+  "/roles/:id",
+  authMiddleware,
+  // rbacMiddleware,
+  roleController.updateRole
+);
 
-router.delete("/roles/:id", authMiddleware, rbacMiddleware, roleController.deleteRole);
+router.delete(
+  "/roles/:id",
+  authMiddleware,
+  // rbacMiddleware,
+  roleController.deleteRole
+);
 
 export const roleRoute = router;

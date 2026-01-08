@@ -12,7 +12,7 @@ export const responseTransformInterceptor = (req: Request, res: Response, next: 
       return originalJson(result);
     }
 
-    const formatted = responseInterceptor(result, res.locals.message || "Success");
+    const formatted = responseInterceptor(result, res.locals.message || result.message);
 
     return originalJson(formatted);
   };

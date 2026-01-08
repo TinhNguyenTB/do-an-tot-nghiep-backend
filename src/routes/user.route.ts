@@ -8,16 +8,31 @@ import { UpdateUserDto } from "@/dtos/user.dto";
 
 const router = Router();
 
-router.get("/users", authMiddleware, rbacMiddleware, userController.getUsers);
+router.get(
+  "/users",
+  authMiddleware,
+  // rbacMiddleware,
+  userController.getUsers
+);
 
-router.post("/users", authMiddleware, rbacMiddleware, userController.createUser);
+router.post(
+  "/users",
+  authMiddleware,
+  // rbacMiddleware,
+  userController.createUser
+);
 
-router.get("/users/:id", authMiddleware, rbacMiddleware, userController.getUserDetails);
+router.get(
+  "/users/:id",
+  authMiddleware,
+  // rbacMiddleware,
+  userController.getUserDetails
+);
 
 router.patch(
   "/users/:id",
   authMiddleware,
-  rbacMiddleware,
+  // rbacMiddleware,
   ValidationPipe(UpdateUserDto),
   userController.updateUser
 );

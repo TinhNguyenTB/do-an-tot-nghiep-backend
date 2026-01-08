@@ -208,7 +208,7 @@ model EndpointPermission {
   endpoint       String @db.VarChar(255) // Ví dụ: /subscriptions/:id
   permissionName String @map("permission_name")
 
-  permission Permission @relation(fields: [permissionName], references: [name])
+  permission Permission @relation(fields: [permissionName], references: [name], onDelete: Cascade)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
