@@ -53,5 +53,5 @@ export class CreateUserDto {
   organizationId?: number;
 
   @IsArray()
-  roles!: string[];
+  roles!: number[];
 }

@@ -4,6 +4,7 @@ import { wrapAsync } from "@/utils/wrapAsync";
 import { StatusCodes } from "http-status-codes";
 import * as roleService from "@/services/role.service";
 import { CreateRoleDto, UpdateRoleDto } from "@/dtos/role.dto";
+import { AuthenticatedRequest } from "@/middlewares/auth.middleware";
 
 // // --- CREATE ---
 const createRole = wrapAsync(async (req: Request, res: Response) => {
@@ -16,11 +17,12 @@ const createRole = wrapAsync(async (req: Request, res: Response) => {
 });
 
 // --- READ ALL (Có Pagination, Sort và Filters) ---
-const getRoles = wrapAsync(async (req: Request, res: Response) => {
+const getRoles = wrapAsync(async (req: AuthenticatedRequest, res: Response) => {
   logger.info("Fetching all roles with query params...");
 
   const queryParams = req.query;
-  const result = await roleService.getAllRoles(queryParams);
+  const organizationId = req.user?.organizationId!;
+  const result = await roleService.getAllRoles(queryParams, organizationId);
 
   res.locals.message = "Lấy danh sách vai trò thành công.";
   res.status(StatusCodes.OK).json(result);

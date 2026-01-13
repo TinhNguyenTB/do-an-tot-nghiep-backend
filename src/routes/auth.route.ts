@@ -34,7 +34,7 @@ router.get("/auth/profile", authMiddleware, userController.getProfile);
 
 router.patch(
   "/auth/profile",
-  // authMiddleware,
+  authMiddleware,
   ValidationPipe(UpdateProfileDto),
   authController.updateProfile
 );

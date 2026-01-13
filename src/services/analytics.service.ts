@@ -59,3 +59,49 @@ export async function getMonthlyRevenueStatistics(
 
   return finalResults;
 }
+
+export async function getSystemCounts() {
+  // Sử dụng prisma.$transaction để thực hiện nhiều truy vấn count song song.
+  const [totalUsers, totalOrganizations, totalSubscriptions, totalPayments] =
+    await prisma.$transaction([
+      prisma.user.count(),
+      prisma.organization.count(),
+      prisma.subscription.count(),
+      prisma.payment.count(),
+    ]);
+
+  return {
+    totalUsers,
+    totalOrganizations,
+    totalSubscriptions,
+    totalPayments,
+  };
+}
+
+export async function getOrganizationStatistics(organizationId: number) {
+  const [totalUsers, totalRoles, totalPermissions] = await prisma.$transaction([
+    prisma.user.count({
+      where: {
+        organizationId,
+      },
+    }),
+
+    prisma.role.count({
+      where: {
+        organizationId,
+      },
+    }),
+
+    prisma.permission.count({
+      where: {
+        organizationId,
+      },
+    }),
+  ]);
+
+  return {
+    totalUsers,
+    totalRoles,
+    totalPermissions,
+  };
+}

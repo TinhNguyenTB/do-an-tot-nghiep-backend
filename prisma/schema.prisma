@@ -74,7 +74,7 @@ model Role {
 
 model Permission {
   id          Int                  @id @default(autoincrement())
-  name        String               @unique
+  name        String             
   description String?              @db.Text
 
   organizationId Int?
@@ -206,9 +206,9 @@ model EndpointPermission {
   id             Int    @id @default(autoincrement())
   httpMethod     String @map("http_method") @db.VarChar(10) // GET, POST, PATCH, DELETE
   endpoint       String @db.VarChar(255) // Ví dụ: /subscriptions/:id
-  permissionName String @map("permission_name")
+  permissionId   Int @map("permission_id")
 
-  permission Permission @relation(fields: [permissionName], references: [name], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

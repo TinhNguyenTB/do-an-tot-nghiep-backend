@@ -7,4 +7,6 @@ const router = Router();
 
 router.get("/analytics/revenue", authMiddleware, analyticsController.getMonthlyRevenue);
 
+router.get("/analytics/counts", authMiddleware, analyticsController.getSystemCounts);
+
 export const analyticsRoute = router;

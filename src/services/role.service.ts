@@ -5,7 +5,10 @@ import { Permission, Prisma } from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 
 // --- READ ALL ---
-export async function getAllRoles(queryParams: { [key: string]: any }) {
+export async function getAllRoles(
+  queryParams: { [key: string]: any },
+  organizationId: number | null
+) {
   const page = Number(queryParams.page) || 1;
   const size = Number(queryParams.size) || 10;
 
@@ -19,6 +22,8 @@ export async function getAllRoles(queryParams: { [key: string]: any }) {
       contains: queryParams["name"],
     };
   }
+
+  where.organizationId = organizationId;
 
   const [data, totalCount] = await prisma.$transaction([
     prisma.role.findMany({

@@ -21,10 +21,11 @@ const registerUser = wrapAsync(async (req: Request, res: Response) => {
   res.status(StatusCodes.ACCEPTED).json(result);
 });
 
-const getUsers = wrapAsync(async (req: Request, res: Response) => {
+const getUsers = wrapAsync(async (req: AuthenticatedRequest, res: Response) => {
   logger.info("Fetching all users with query params...");
   const queryParams = req.query;
-  const result = await userService.getAllUsers(queryParams);
+  const organizationId = req.user?.organizationId!;
+  const result = await userService.getAllUsers(queryParams, organizationId);
 
   res.locals.message = "Lấy danh người dùng thành công.";
   res.status(StatusCodes.OK).json(result);
@@ -119,7 +120,7 @@ const updateUser = wrapAsync(async (req: Request, res: Response) => {
   res.status(StatusCodes.OK).json(result);
 });
 
-const createUser = wrapAsync(async (req: Request, res: Response) => {
+const createUser = wrapAsync(async (req: AuthenticatedRequest, res: Response) => {
   logger.info("Creating user...");
   const body = req.body as CreateUserDto;
   const defaultPassword = "password";
@@ -159,6 +160,14 @@ const getProfile = wrapAsync(async (req: AuthenticatedRequest, res: Response) =>
   res.status(StatusCodes.OK).json(profile);
 });
 
+const deleteUser = wrapAsync(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req?.params.id; // từ auth middleware
+  logger.info(`Deleting user ${userId}...`);
+  await userService.deleteUser(+userId, req.user);
+
+  res.status(StatusCodes.NO_CONTENT).send();
+});
+
 export const userController = {
   registerUser,
   getUsers,
@@ -172,4 +181,5 @@ export const userController = {
   changePassword,
   uploadAvatar,
   getProfile,
+  deleteUser,
 };

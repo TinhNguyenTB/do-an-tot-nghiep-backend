@@ -37,6 +37,13 @@ router.patch(
   userController.updateUser
 );
 
+router.delete(
+  "/users/:id",
+  authMiddleware,
+  // rbacMiddleware,
+  userController.deleteUser
+);
+
 router.post("/users/re-payment", ValidationPipe(RePaymentDto), userController.rePayment);
 
 export const userRoute = router;

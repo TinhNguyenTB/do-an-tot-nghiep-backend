@@ -15,64 +15,153 @@ import { getUserPermissions } from "@/utils/rbacUtils";
 import { uploadImageToCloudinary } from "@/utils/uploadImageToCloudinary";
 import { ChangePasswordDto } from "@/dtos/auth.dto";
 
+// export async function createUser(dto: CreateUserDto, defaultPassword: string) {
+//   // 1. Kiểm tra email tồn tại
+//   const existingUser = await prisma.user.findUnique({ where: { email: dto.email } });
+//   if (existingUser) {
+//     throw new HttpException(StatusCodes.CONFLICT, "Email đã được sử dụng.");
+//   }
+
+//   // 2. Validate Organization và Roles trong Transaction
+//   return prisma.$transaction(async (tx) => {
+//     // 2.1. Kiểm tra Organization tồn tại (nếu organizationId được cung cấp)
+//     if (dto.organizationId !== undefined && dto.organizationId !== null) {
+//       const organization = await tx.organization.findUnique({
+//         where: { id: dto.organizationId },
+//       });
+//       if (!organization) {
+//         throw new HttpException(StatusCodes.NOT_FOUND, "Tổ chức không tìm thấy");
+//       }
+//     }
+
+//     // 2.2. Validate và Lấy Role ID
+//     if (!dto.roles || dto.roles.length === 0) {
+//       throw new HttpException(
+//         StatusCodes.BAD_REQUEST,
+//         "Phải gán ít nhất một vai trò cho người dùng."
+//       );
+//     }
+
+//     // Tìm kiếm các Role dựa trên tên và lấy ID (chú ý: nếu có organizationId, có thể cần lọc theo Org)
+//     // Giả định: Chỉ tìm các vai trò Global hoặc vai trò thuộc Organization được chỉ định.
+//     const roles = await tx.role.findMany({
+//       where: {
+//         id: { in: dto.roles },
+//         // Nếu có organizationId, tìm kiếm các roles thuộc Org đó HOẶC roles Global (organizationId: null)
+//         // Tuy nhiên, để đơn giản và an toàn, ta chỉ tìm các vai trò KHÔNG thuộc Org khác.
+//         OR: [
+//           { organizationId: dto.organizationId ?? null }, // Thuộc Org hiện tại/Global
+//           // Thêm logic để đảm bảo không gán vai trò Org-scope của Org khác nếu cần
+//         ],
+//       },
+//       select: { id: true, name: true },
+//     });
+
+//     const roleIdsToAssign = roles.map((r) => r.id);
+
+//     // 3. Băm (Hash) mật khẩu
+//     const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+
+//     // 4. Tạo USER và UserRoles lồng nhau
+//     const user = await tx.user.create({
+//       data: {
+//         organizationId: dto.organizationId || null,
+//         email: dto.email,
+//         password: hashedPassword,
+//         name: dto.name || "Người dùng mới",
+//         status: UserStatus.ACTIVE,
+//         roles: {
+//           create: roleIdsToAssign.map((roleId) => ({
+//             // ✅ SỬ DỤNG roleId (INT)
+//             roleId: roleId,
+//           })),
+//         },
+//       },
+//     });
+
+//     // 5. Trả về kết quả
+//     return {
+//       userId: user.id,
+//       email: user.email,
+//     };
+//   });
+// }
+
 export async function createUser(dto: CreateUserDto, defaultPassword: string) {
-  // 1. Kiểm tra email tồn tại
+  // 1. Kiểm tra email duy nhất
   const existingUser = await prisma.user.findUnique({ where: { email: dto.email } });
   if (existingUser) {
     throw new HttpException(StatusCodes.CONFLICT, "Email đã được sử dụng.");
   }
 
-  // 2. Validate Organization và Roles trong Transaction
+  // 2. Chạy Transaction để đảm bảo tính toàn vẹn dữ liệu
   return prisma.$transaction(async (tx) => {
-    // 2.1. Kiểm tra Organization tồn tại (nếu organizationId được cung cấp)
-    if (dto.organizationId !== undefined && dto.organizationId !== null) {
+    // --- PHẦN 1: KIỂM TRA GIỚI HẠN GÓI DỊCH VỤ (Nếu có Org) ---
+    if (dto.organizationId) {
       const organization = await tx.organization.findUnique({
         where: { id: dto.organizationId },
+        include: {
+          owner: {
+            include: {
+              userSubscriptions: {
+                where: { status: "ACTIVE" },
+                include: { subscription: true },
+                orderBy: { endDate: "desc" },
+                take: 1,
+              },
+            },
+          },
+        },
       });
+
       if (!organization) {
-        throw new HttpException(StatusCodes.NOT_FOUND, "Tổ chức không tìm thấy");
+        throw new HttpException(StatusCodes.NOT_FOUND, "Tổ chức không tìm thấy.");
+      }
+
+      // Kiểm tra gói dịch vụ của chủ sở hữu
+      const activeSub = organization.owner.userSubscriptions[0];
+      if (!activeSub) {
+        throw new HttpException(
+          StatusCodes.PAYMENT_REQUIRED,
+          "Tổ chức không có gói dịch vụ hoạt động."
+        );
+      }
+
+      const userLimit = activeSub.subscription.userLimit;
+      if (userLimit !== null) {
+        const currentUsersCount = await tx.user.count({
+          where: { organizationId: dto.organizationId },
+        });
+
+        if (currentUsersCount >= userLimit) {
+          throw new HttpException(
+            StatusCodes.FORBIDDEN,
+            `Đã đạt giới hạn tối đa ${userLimit} người dùng của gói ${activeSub.subscription.name}.`
+          );
+        }
       }
     }
 
-    // 2.2. Validate và Lấy Role ID
+    // --- PHẦN 2: XỬ LÝ VAI TRÒ (Dùng roleId - Int) ---
     if (!dto.roles || dto.roles.length === 0) {
-      throw new HttpException(
-        StatusCodes.BAD_REQUEST,
-        "Phải gán ít nhất một vai trò cho người dùng."
-      );
+      throw new HttpException(StatusCodes.BAD_REQUEST, "Phải gán ít nhất một vai trò.");
     }
 
-    // Tìm kiếm các Role dựa trên tên và lấy ID (chú ý: nếu có organizationId, có thể cần lọc theo Org)
-    // Giả định: Chỉ tìm các vai trò Global hoặc vai trò thuộc Organization được chỉ định.
+    // dto.roles bây giờ là mảng các ID (number[])
     const roles = await tx.role.findMany({
       where: {
-        name: { in: dto.roles },
-        // Nếu có organizationId, tìm kiếm các roles thuộc Org đó HOẶC roles Global (organizationId: null)
-        // Tuy nhiên, để đơn giản và an toàn, ta chỉ tìm các vai trò KHÔNG thuộc Org khác.
-        OR: [
-          { organizationId: dto.organizationId ?? null }, // Thuộc Org hiện tại/Global
-          // Thêm logic để đảm bảo không gán vai trò Org-scope của Org khác nếu cần
-        ],
+        id: { in: dto.roles },
       },
-      select: { id: true, name: true },
     });
 
     if (roles.length !== dto.roles.length) {
-      // Xác định tên vai trò không hợp lệ để thông báo chi tiết hơn
-      const foundNames = roles.map((r) => r.name);
-      const invalidRoles = dto.roles.filter((name) => !foundNames.includes(name));
-      throw new HttpException(
-        StatusCodes.BAD_REQUEST,
-        `Một hoặc nhiều vai trò không hợp lệ hoặc không tồn tại: ${invalidRoles.join(", ")}`
-      );
+      throw new HttpException(StatusCodes.BAD_REQUEST, "Một hoặc nhiều vai trò không tồn tại.");
     }
 
-    const roleIdsToAssign = roles.map((r) => r.id);
-
-    // 3. Băm (Hash) mật khẩu
+    // 3. Băm mật khẩu
     const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
-    // 4. Tạo USER và UserRoles lồng nhau
+    // 4. Tạo User và liên kết Roles
     const user = await tx.user.create({
       data: {
         organizationId: dto.organizationId || null,
@@ -81,18 +170,17 @@ export async function createUser(dto: CreateUserDto, defaultPassword: string) {
         name: dto.name || "Người dùng mới",
         status: UserStatus.ACTIVE,
         roles: {
-          create: roleIdsToAssign.map((roleId) => ({
-            // ✅ SỬ DỤNG roleId (INT)
-            roleId: roleId,
+          create: roles.map((r) => ({
+            roleId: r.id, // Sử dụng roleId thay vì roleName
           })),
         },
       },
     });
 
-    // 5. Trả về kết quả
     return {
       userId: user.id,
       email: user.email,
+      roles: roles.map((r) => r.name),
     };
   });
 }
@@ -120,56 +208,93 @@ export async function register(dto: RegisterUserDto) {
   const hashedPassword = await bcrypt.hash(dto.password, 10);
 
   const isOrgRegister = !!dto.organizationName;
-  const desiredRoleName = isOrgRegister ? ROLES.ORG_ADMIN : ROLES.CLIENT;
-
-  // 4. Tìm Role ID tương ứng (Giả định Role này là Global/Base Role)
-  const roleRecord = await prisma.role.findFirst({
-    where: {
-      name: desiredRoleName,
-    },
-    select: { id: true },
-  });
-
-  if (!roleRecord) {
-    // Trường hợp không tìm thấy vai trò Global/Base (cần kiểm tra file seed)
-    throw new HttpException(
-      StatusCodes.INTERNAL_SERVER_ERROR,
-      `Không tìm thấy vai trò cơ sở: ${desiredRoleName}`
-    );
-  }
-  const roleId = roleRecord.id;
 
   // Bắt đầu Transaction
   const [newUser, newPayment] = await prisma.$transaction(async (tx) => {
-    // 2. Tạo USER
+    // BƯỚC 1: Tạo User cơ bản
     const user = await tx.user.create({
       data: {
         email: dto.email,
         password: hashedPassword,
         name: dto.name,
         status: UserStatus.PENDING,
-        roles: {
-          create: {
-            roleId: roleId, // ✅ SỬ DỤNG roleId (INT)
-          },
-        },
       },
     });
 
-    // 3. Nếu là đăng ký Tổ chức, cập nhật OWNER ID cho Organization
-    if (isOrgRegister && user) {
+    let finalRoleId: number;
+
+    if (isOrgRegister) {
+      // BƯỚC 2: Tạo Organization
       const newOrg = await tx.organization.create({
-        data: { name: dto.organizationName!, ownerId: user.id },
-      });
-      await tx.user.update({
-        where: {
-          id: user.id,
+        data: {
+          name: dto.organizationName!,
+          ownerId: user.id,
         },
+      });
+
+      // BƯỚC 3: Tạo các Permission mặc định cho Org này
+      const defaultPermNames = [
+        "read_users",
+        "read_roles",
+        "read_permissions",
+        "read_payment_history",
+      ];
+
+      // Sử dụng Promise.all để tạo từng permission và lấy về danh sách object kèm ID
+      const createdPermissions = await Promise.all(
+        defaultPermNames.map((name) =>
+          tx.permission.create({
+            data: {
+              name,
+              organizationId: newOrg.id,
+              description: `Quyền mặc định ${name} cho tổ chức`,
+            },
+          })
+        )
+      );
+
+      // BƯỚC 4: Tạo Role ORG_ADMIN cho Org này
+      const orgAdminRole = await tx.role.create({
+        data: {
+          name: ROLES.ORG_ADMIN, // 'org_admin'
+          organizationId: newOrg.id,
+          description: "Quản trị viên cấp cao của tổ chức",
+        },
+      });
+
+      // BƯỚC 5: Gán các Permission vừa tạo vào Role ORG_ADMIN
+      await tx.rolePermission.createMany({
+        data: createdPermissions.map((p) => ({
+          roleId: orgAdminRole.id,
+          permissionId: p.id,
+        })),
+      });
+
+      // BƯỚC 6: Cập nhật organizationId cho User
+      await tx.user.update({
+        where: { id: user.id },
         data: { organizationId: newOrg.id },
       });
+
+      finalRoleId = orgAdminRole.id;
+    } else {
+      // Nếu là khách lẻ (Client) - Lấy role Global từ hệ thống (đã có trong seed)
+      const clientRole = await tx.role.findFirst({
+        where: { name: ROLES.CLIENT, organizationId: null },
+      });
+      if (!clientRole) throw new Error("Global Client Role not found");
+      finalRoleId = clientRole.id;
     }
 
-    // 4. Tạo PAYMENT
+    // BƯỚC 7: Gán Role cuối cùng cho User (Dù là Org Admin hay Client)
+    await tx.userRole.create({
+      data: {
+        userId: user.id,
+        roleId: finalRoleId,
+      },
+    });
+
+    // BƯỚC 8: Tạo PAYMENT
     const payment = await tx.payment.create({
       data: {
         userId: user.id,
@@ -339,7 +464,10 @@ export async function recreatePaymentSession(dto: RePaymentDto) {
   };
 }
 
-export async function getAllUsers(queryParams: { [key: string]: any }) {
+export async function getAllUsers(
+  queryParams: { [key: string]: any },
+  organizationId: number | null
+) {
   const page = Number(queryParams.page) || DEFAULT_PAGE;
   const size = Number(queryParams.size) || DEFAULT_SIZE;
 
@@ -364,6 +492,9 @@ export async function getAllUsers(queryParams: { [key: string]: any }) {
         };
       }
     }
+  }
+  if (organizationId) {
+    where.organizationId = organizationId;
   }
 
   // 3. Xây dựng ORDER BY (Sorting)
@@ -803,4 +934,53 @@ export async function getUserProfile(userId: number) {
     ...user,
     roles: user.roles.map((r) => r.role.name),
   };
+}
+
+export async function deleteUser(targetUserId: number, requestUser: any) {
+  // 1. Tìm user cần xóa
+  const userToDelete = await prisma.user.findUnique({
+    where: { id: targetUserId },
+  });
+
+  if (!userToDelete) {
+    throw new HttpException(StatusCodes.NOT_FOUND, "Người dùng không tồn tại.");
+  }
+
+  // 2. Kiểm tra quyền (Security Check)
+  // - Super Admin: Xóa được mọi người
+  // - Org Admin: Chỉ xóa được người trong cùng Organization
+  const isSuperAdmin = requestUser.roles.includes(ROLES.SUPER_ADMIN);
+  const isSameOrg = userToDelete.organizationId === requestUser.organizationId;
+
+  if (!isSuperAdmin && !isSameOrg) {
+    throw new HttpException(StatusCodes.FORBIDDEN, "Bạn không có quyền xóa người dùng này.");
+  }
+
+  // Không cho phép tự xóa chính mình qua API này (nên có API riêng hoặc logic khác)
+  if (targetUserId === requestUser.id) {
+    throw new HttpException(StatusCodes.BAD_REQUEST, "Bạn không thể tự xóa chính mình.");
+  }
+
+  // 3. Thực hiện xóa trong Transaction
+  return await prisma.$transaction(async (tx) => {
+    // Xóa các dữ liệu phụ thuộc trước (theo schema của bạn)
+    await tx.userRole.deleteMany({ where: { userId: targetUserId } });
+    await tx.passwordResetToken.deleteMany({ where: { userId: targetUserId } });
+    await tx.userSubscription.deleteMany({ where: { userId: targetUserId } });
+    await tx.payment.deleteMany({ where: { userId: targetUserId } });
+
+    // Nếu User này là Owner của một Organization, cần xử lý Org đó (ví dụ: báo lỗi hoặc chuyển owner)
+    const ownedOrg = await tx.organization.findFirst({ where: { ownerId: targetUserId } });
+    if (ownedOrg) {
+      throw new HttpException(
+        StatusCodes.BAD_REQUEST,
+        "Không thể xóa vì người dùng này là chủ sở hữu của tổ chức. Hãy chuyển quyền chủ sở hữu trước."
+      );
+    }
+
+    // Cuối cùng xóa User
+    await tx.user.delete({
+      where: { id: targetUserId },
+    });
+  });
 }

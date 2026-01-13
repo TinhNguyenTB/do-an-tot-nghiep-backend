@@ -4,7 +4,10 @@ import prisma from "@/prismaClient";
 import { Prisma } from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 
-export async function getAllPermissions(queryParams: { [key: string]: any }) {
+export async function getAllPermissions(
+  queryParams: { [key: string]: any },
+  organizationId: number | null
+) {
   const page = Number(queryParams.page) || 1;
   const size = Number(queryParams.size) || 10;
   const search = queryParams.search?.trim();
@@ -17,6 +20,7 @@ export async function getAllPermissions(queryParams: { [key: string]: any }) {
       contains: queryParams["name"],
     };
   }
+  where.organizationId = organizationId;
 
   if (search) {
     where.OR = [

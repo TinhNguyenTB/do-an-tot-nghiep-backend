@@ -4,12 +4,14 @@ import { wrapAsync } from "@/utils/wrapAsync";
 import { StatusCodes } from "http-status-codes";
 import * as permissionService from "@/services/permission.service";
 import { CreatePermissionDto, UpdatePermissionDto } from "@/dtos/permission.dto";
+import { AuthenticatedRequest } from "@/middlewares/auth.middleware";
 
-const getPermissions = wrapAsync(async (req: Request, res: Response) => {
+const getPermissions = wrapAsync(async (req: AuthenticatedRequest, res: Response) => {
   logger.info("Fetching all permissions with query params...");
 
   const queryParams = req.query;
-  const result = await permissionService.getAllPermissions(queryParams);
+  const organizationId = req.user?.organizationId!;
+  const result = await permissionService.getAllPermissions(queryParams, +organizationId);
 
   res.locals.message = "Lấy danh sách quyền thành công.";
   res.status(StatusCodes.OK).json(result);

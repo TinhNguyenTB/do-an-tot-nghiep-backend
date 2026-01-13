@@ -28,7 +28,7 @@ const resetPassword = wrapAsync(async (req, res) => {
 });
 
 const updateProfile = wrapAsync(async (req: AuthenticatedRequest, res: Response) => {
-  const userId = req?.user?.id;
+  const userId = req.user?.id;
   const body = req.body as UpdateProfileDto;
 
   const result = await authService.updateUserProfile(userId!, body);

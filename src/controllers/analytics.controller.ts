@@ -3,10 +3,7 @@ import { logger } from "@/utils/logger";
 import { wrapAsync } from "@/utils/wrapAsync";
 import { StatusCodes } from "http-status-codes";
 import * as analyticsService from "@/services/analytics.service";
-
-// ✨ LƯU Ý: Bạn cần kiểm tra quyền (RBAC) ở đây.
-// Chỉ Super Admin hoặc Org Admin có quyền xem thống kê.
-// Ví dụ: rbacMiddleware cần kiểm tra quyền 'read_analytics'
+import { AuthenticatedRequest } from "@/middlewares/auth.middleware";
 
 const getMonthlyRevenue = wrapAsync(async (req: Request, res: Response) => {
   logger.info("Fetching monthly revenue statistics...");
@@ -20,6 +17,20 @@ const getMonthlyRevenue = wrapAsync(async (req: Request, res: Response) => {
   res.status(StatusCodes.OK).json(result);
 });
 
+const getSystemCounts = wrapAsync(async (req: AuthenticatedRequest, res: Response) => {
+  logger.info("Fetching total system counts...");
+  let result = null;
+  if (req.user?.organizationId !== null) {
+    result = await analyticsService.getOrganizationStatistics(req.user!.organizationId!);
+  } else {
+    result = await analyticsService.getSystemCounts();
+  }
+
+  res.locals.message = "Thành công.";
+  res.status(StatusCodes.OK).json(result);
+});
+
 export const analyticsController = {
   getMonthlyRevenue,
+  getSystemCounts,
 };

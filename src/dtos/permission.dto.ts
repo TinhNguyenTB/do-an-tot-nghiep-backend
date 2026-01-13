@@ -35,4 +35,11 @@ export class UpdatePermissionDto {
     message: "Mô tả permission không được vượt quá 255 ký tự.",
   })
   description?: string;
+
+  @IsOptional()
+  organizationId?: number;
+  @IsOptional()
+  createdAt?: string;
+  @IsOptional()
+  updatedAt?: string;
 }
