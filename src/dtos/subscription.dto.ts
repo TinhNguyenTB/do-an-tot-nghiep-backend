@@ -17,3 +17,9 @@ export class CreateSubscriptionDto {
   @Min(1)
   userLimit!: number;
 }
+
+export class RenewSubscriptionDto {
+  @IsNumber()
+  @Min(1)
+  subscriptionId!: number;
+}

@@ -15,78 +15,6 @@ import { getUserPermissions } from "@/utils/rbacUtils";
 import { uploadImageToCloudinary } from "@/utils/uploadImageToCloudinary";
 import { ChangePasswordDto } from "@/dtos/auth.dto";
 
-// export async function createUser(dto: CreateUserDto, defaultPassword: string) {
-//   // 1. Kiểm tra email tồn tại
-//   const existingUser = await prisma.user.findUnique({ where: { email: dto.email } });
-//   if (existingUser) {
-//     throw new HttpException(StatusCodes.CONFLICT, "Email đã được sử dụng.");
-//   }
-
-//   // 2. Validate Organization và Roles trong Transaction
-//   return prisma.$transaction(async (tx) => {
-//     // 2.1. Kiểm tra Organization tồn tại (nếu organizationId được cung cấp)
-//     if (dto.organizationId !== undefined && dto.organizationId !== null) {
-//       const organization = await tx.organization.findUnique({
-//         where: { id: dto.organizationId },
-//       });
-//       if (!organization) {
-//         throw new HttpException(StatusCodes.NOT_FOUND, "Tổ chức không tìm thấy");
-//       }
-//     }
-
-//     // 2.2. Validate và Lấy Role ID
-//     if (!dto.roles || dto.roles.length === 0) {
-//       throw new HttpException(
-//         StatusCodes.BAD_REQUEST,
-//         "Phải gán ít nhất một vai trò cho người dùng."
-//       );
-//     }
-
-//     // Tìm kiếm các Role dựa trên tên và lấy ID (chú ý: nếu có organizationId, có thể cần lọc theo Org)
-//     // Giả định: Chỉ tìm các vai trò Global hoặc vai trò thuộc Organization được chỉ định.
-//     const roles = await tx.role.findMany({
-//       where: {
-//         id: { in: dto.roles },
-//         // Nếu có organizationId, tìm kiếm các roles thuộc Org đó HOẶC roles Global (organizationId: null)
-//         // Tuy nhiên, để đơn giản và an toàn, ta chỉ tìm các vai trò KHÔNG thuộc Org khác.
-//         OR: [
-//           { organizationId: dto.organizationId ?? null }, // Thuộc Org hiện tại/Global
-//           // Thêm logic để đảm bảo không gán vai trò Org-scope của Org khác nếu cần
-//         ],
-//       },
-//       select: { id: true, name: true },
-//     });
-
-//     const roleIdsToAssign = roles.map((r) => r.id);
-
-//     // 3. Băm (Hash) mật khẩu
-//     const hashedPassword = await bcrypt.hash(defaultPassword, 10);
-
-//     // 4. Tạo USER và UserRoles lồng nhau
-//     const user = await tx.user.create({
-//       data: {
-//         organizationId: dto.organizationId || null,
-//         email: dto.email,
-//         password: hashedPassword,
-//         name: dto.name || "Người dùng mới",
-//         status: UserStatus.ACTIVE,
-//         roles: {
-//           create: roleIdsToAssign.map((roleId) => ({
-//             // ✅ SỬ DỤNG roleId (INT)
-//             roleId: roleId,
-//           })),
-//         },
-//       },
-//     });
-
-//     // 5. Trả về kết quả
-//     return {
-//       userId: user.id,
-//       email: user.email,
-//     };
-//   });
-// }
-
 export async function createUser(dto: CreateUserDto, defaultPassword: string) {
   // 1. Kiểm tra email duy nhất
   const existingUser = await prisma.user.findUnique({ where: { email: dto.email } });
@@ -171,7 +99,7 @@ export async function createUser(dto: CreateUserDto, defaultPassword: string) {
         status: UserStatus.ACTIVE,
         roles: {
           create: roles.map((r) => ({
-            roleId: r.id, // Sử dụng roleId thay vì roleName
+            roleId: r.id,
           })),
         },
       },

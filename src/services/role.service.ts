@@ -250,7 +250,6 @@ export const handleCreateRole = async (payload: CreateRoleDto) => {
       where: {
         id: { in: permissionIds }, // Tìm theo ID
         // Tùy chọn: Đảm bảo Permission là Global HOẶC thuộc Org hiện tại
-        OR: [{ organizationId: null }, { organizationId: orgId }],
       },
       select: { id: true, name: true },
     });
@@ -393,7 +392,7 @@ export async function getAllPermissionsOfRole(
 }
 
 export const handleUpdateRole = async (roleId: number, payload: UpdateRoleDto) => {
-  const { description, inheritsFrom, permissions } = payload;
+  const { description, inheritsFrom, permissions, name } = payload;
 
   // 1. Kiểm tra Role tồn tại
   const role = await prisma.role.findUnique({
@@ -415,8 +414,6 @@ export const handleUpdateRole = async (roleId: number, payload: UpdateRoleDto) =
     const existedPermissions = await prisma.permission.findMany({
       where: {
         id: { in: permissionIds },
-        // Đảm bảo Permission là Global HOẶC thuộc Org của Role
-        OR: [{ organizationId: null }, { organizationId: role.organizationId }],
       },
       select: { id: true },
     });
@@ -438,7 +435,7 @@ export const handleUpdateRole = async (roleId: number, payload: UpdateRoleDto) =
     // =========================
     const updatedRole = await tx.role.update({
       where: { id: roleId }, // SỬ DỤNG ID
-      data: { description },
+      data: { description, name },
       select: { id: true }, // Chỉ cần ID để gọi getRoleDetail
     });
 

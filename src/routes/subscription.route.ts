@@ -10,6 +10,13 @@ const router = Router();
 router.get("/subscriptions", subscriptionController.getSubscriptions);
 
 router.get(
+  "/subscriptions/my",
+  authMiddleware,
+  // rbacMiddleware,
+  subscriptionController.getMySubscriptionHandler
+);
+
+router.get(
   "/subscriptions/:id",
   authMiddleware,
   // rbacMiddleware,
@@ -36,6 +43,13 @@ router.delete(
   authMiddleware,
   // rbacMiddleware,
   subscriptionController.deleteSubscription
+);
+
+router.post(
+  "/subscriptions/renew",
+  authMiddleware,
+  // rbacMiddleware,
+  subscriptionController.renewSubscription
 );
 
 export const subscriptionRoute = router;

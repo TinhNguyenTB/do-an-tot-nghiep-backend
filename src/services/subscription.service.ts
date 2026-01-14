@@ -1,7 +1,8 @@
+import { stripe } from "@/configs/stripe.config";
 import { CreateSubscriptionDto } from "@/dtos/subscription.dto";
 import { HttpException } from "@/exceptions/http-exception";
 import prisma from "@/prismaClient";
-import { Prisma } from "@prisma/client";
+import { PaymentStatus, PaymentType, Prisma, SubscriptionStatus, UserStatus } from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 
 async function checkSubscriptionExists(id: number): Promise<boolean> {
@@ -144,4 +145,110 @@ export async function deleteSubscription(id: number) {
     }
     throw error;
   }
+}
+
+export async function handleRenewSubscription(userId: number, subscriptionId: number) {
+  // 1. Kiểm tra User tồn tại và đang ACTIVE
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { organization: true },
+  });
+
+  if (!user || user.status !== UserStatus.ACTIVE) {
+    throw new HttpException(
+      StatusCodes.FORBIDDEN,
+      "Tài khoản không hợp lệ hoặc chưa được kích hoạt."
+    );
+  }
+
+  // 2. Lấy thông tin gói dịch vụ muốn gia hạn (thường là gói đang dùng hoặc gói mới)
+  const subscription = await prisma.subscription.findUnique({
+    where: { id: subscriptionId },
+  });
+
+  if (!subscription) {
+    throw new HttpException(StatusCodes.NOT_FOUND, "Gói dịch vụ không tồn tại.");
+  }
+
+  // 3. Tạo bản ghi Payment PENDING
+  const newPayment = await prisma.payment.create({
+    data: {
+      userId: user.id,
+      subscriptionId: subscription.id,
+      amount: subscription.price,
+      paymentType: PaymentType.EXTEND, // Đánh dấu là gia hạn
+      status: PaymentStatus.PENDING,
+    },
+  });
+
+  // 4. Lấy hoặc tạo Stripe Customer
+  let stripe_customer = await prisma.stripeCustomer.findUnique({
+    where: { customerId: user.id },
+  });
+
+  if (!stripe_customer) {
+    const customer = await stripe.customers.create({ email: user.email });
+    stripe_customer = await prisma.stripeCustomer.create({
+      data: { customerId: user.id, stripeCustomerId: customer.id },
+    });
+  }
+
+  // 5. Tạo Stripe Checkout Session
+  const session = await stripe.checkout.sessions.create({
+    customer: stripe_customer.stripeCustomerId,
+    payment_method_types: ["card"],
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency: "vnd",
+          product_data: { name: `Gia hạn: ${subscription.name}` },
+          unit_amount: Math.round(subscription.price.toNumber()),
+        },
+      },
+    ],
+    mode: "payment",
+    success_url: `${process.env.CLIENT_URL}/current-subscription?success=true&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${process.env.CLIENT_URL}/current-subscription?canceled=true`,
+    metadata: {
+      paymentId: newPayment.id,
+      userId: user.id,
+      subscriptionId: subscription.id,
+      isRenewal: "true", // Đánh dấu để Webhook phân biệt với đăng ký mới
+    },
+  });
+
+  return { redirectUrl: session.url };
+}
+
+export async function getMySubscription(userId: number) {
+  // 1. Lấy thông tin User
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { organizationId: true },
+  });
+
+  if (!user) {
+    throw new HttpException(StatusCodes.NOT_FOUND, "Người dùng không tồn tại.");
+  }
+
+  // 2. Tìm gói dịch vụ đang ACTIVE
+  const currentSub = await prisma.userSubscription.findFirst({
+    where: {
+      userId: userId,
+      status: SubscriptionStatus.ACTIVE,
+    },
+    include: {
+      subscription: true, // Lấy thông tin tên gói, giá, giới hạn...
+    },
+    orderBy: {
+      endDate: "desc", // Lấy gói có hạn xa nhất nếu có nhiều bản ghi
+    },
+  });
+
+  if (!currentSub) {
+    return null;
+  }
+
+  return currentSub;
 }

@@ -2,8 +2,9 @@ import { Request, Response } from "express";
 import { logger } from "@/utils/logger";
 import { wrapAsync } from "@/utils/wrapAsync";
 import * as subService from "@/services/subscription.service";
-import { CreateSubscriptionDto } from "@/dtos/subscription.dto";
+import { CreateSubscriptionDto, RenewSubscriptionDto } from "@/dtos/subscription.dto";
 import { StatusCodes } from "http-status-codes";
+import { AuthenticatedRequest } from "@/middlewares/auth.middleware";
 
 // --- CREATE ---
 const createSubscription = wrapAsync(async (req: Request, res: Response) => {
@@ -52,10 +53,29 @@ const deleteSubscription = wrapAsync(async (req: Request, res: Response) => {
   res.status(StatusCodes.NO_CONTENT).send(); // Phản hồi 204 No Content
 });
 
+const renewSubscription = wrapAsync(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user?.id;
+  const { subscriptionId } = req.body as RenewSubscriptionDto;
+
+  const result = await subService.handleRenewSubscription(userId!, subscriptionId);
+  res.locals.message = `Gia hạn gói dịch vụ ID: ${subscriptionId}`;
+  res.status(StatusCodes.OK).json(result);
+});
+
+const getMySubscriptionHandler = wrapAsync(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user?.id;
+
+  const result = await subService.getMySubscription(userId!);
+  res.locals.message = `Lấy gói dịch vụ hiện tại của user ID: ${userId}`;
+  res.status(StatusCodes.OK).json(result);
+});
+
 export const subscriptionController = {
   createSubscription,
   getSubscriptions,
   getSubscription,
   updateSubscription,
   deleteSubscription,
+  renewSubscription,
+  getMySubscriptionHandler,
 };

@@ -52,55 +52,24 @@ export async function handleWebhook(rawBody: Buffer, signature: string): Promise
 
   // 3. Xử lý sự kiện 'checkout.session.completed'
   if (event.type === "checkout.session.completed") {
-    // Chỉ cần transaction ID khi thanh toán đã hoàn tất
+    const isRenewal = session?.metadata?.isRenewal === "true";
+    // (Lấy transactionId như code cũ của bạn)
     const transactionId =
       typeof session.payment_intent === "string"
         ? session.payment_intent
         : (session.payment_intent as Stripe.PaymentIntent)?.id;
 
-    // Kiểm tra dữ liệu BẮT BUỘC
-    if (!paymentId || !userId || !subscriptionId) {
-      console.error(
-        "Missing User/Payment/Subscription metadata in completed session.",
-        session.metadata
-      );
-      throw new HttpException(
-        StatusCodes.BAD_REQUEST,
-        "Missing User/Payment/Subscription metadata."
-      );
-    }
-
-    if (!transactionId) {
-      console.error("Missing payment intent ID for completed session.", session.id);
-      throw new HttpException(StatusCodes.BAD_REQUEST, "Missing payment intent ID.");
-    }
-
     try {
       await prisma.$transaction(async (tx) => {
-        // Lấy thông tin gói dịch vụ
         const subscription = await tx.subscription.findUnique({
           where: { id: subscriptionId },
         });
 
-        if (!subscription) {
-          // Log lỗi nghiêm trọng, nhưng vẫn phải gửi 200 cho Stripe
-          logger.error(`Subscription ID ${subscriptionId} not found. Cannot activate user.`);
-          throw new HttpException(
-            StatusCodes.INTERNAL_SERVER_ERROR,
-            "Subscription data not found."
-          );
-        }
+        if (!subscription) throw new Error("Subscription not found");
 
-        // A. Cập nhật Payment Status
-        // Kiểm tra xem Payment đã được xử lý chưa (tránh webhook gửi lại)
-        const existingPayment = await tx.payment.findUnique({ where: { id: paymentId } });
-        if (existingPayment?.status === PaymentStatus.SUCCESS) {
-          logger.warn(`Payment ID ${paymentId} already processed.`);
-          return; // Đã xử lý, thoát transaction
-        }
-
-        const updatedPayment = await tx.payment.update({
-          where: { id: paymentId, userId: userId, status: PaymentStatus.PENDING },
+        // 1. Cập nhật Payment SUCCESS
+        await tx.payment.update({
+          where: { id: paymentId },
           data: {
             status: PaymentStatus.SUCCESS,
             transactionId: transactionId,
@@ -108,34 +77,168 @@ export async function handleWebhook(rawBody: Buffer, signature: string): Promise
           },
         });
 
-        // B. Cập nhật User Status
-        await tx.user.update({
-          where: { id: userId, status: UserStatus.PENDING },
-          data: { status: UserStatus.ACTIVE },
-        });
+        if (isRenewal) {
+          // --- LOGIC GIA HẠN (CỘNG DỒN) ---
 
-        // C. Tạo UserSubscription
-        const durationDays = subscription.duration;
-        const startDate = new Date();
-        const endDate = new Date(startDate);
-        endDate.setDate(startDate.getDate() + durationDays);
+          // Tìm gói cũ đang ACTIVE
+          const currentActiveSub = await tx.userSubscription.findFirst({
+            where: {
+              userId: userId,
+              status: SubscriptionStatus.ACTIVE,
+            },
+            orderBy: { endDate: "desc" }, // Lấy gói có hạn xa nhất
+          });
 
-        await tx.userSubscription.create({
-          data: {
-            userId: userId,
-            subscriptionId: subscriptionId,
-            paymentId: updatedPayment.id,
-            startDate: startDate,
-            endDate: endDate,
-            status: SubscriptionStatus.ACTIVE,
-          },
-        });
-        logger.success(
-          `User with ID: ${userId} successfully activated with subscription ${subscriptionId}.`
-        );
+          let newStartDate: Date;
+          let newEndDate: Date;
+
+          if (currentActiveSub && currentActiveSub.endDate > new Date()) {
+            // Nếu còn hạn: Ngày bắt đầu mới là ngày hết hạn cũ (Cộng dồn)
+            newStartDate = currentActiveSub.endDate;
+          } else {
+            // Nếu đã hết hạn hoặc không có gói: Bắt đầu từ hôm nay
+            newStartDate = new Date();
+          }
+
+          newEndDate = new Date(newStartDate);
+          newEndDate.setDate(newStartDate.getDate() + subscription.duration);
+
+          if (currentActiveSub && currentActiveSub.endDate > new Date()) {
+            // Cập nhật thẳng vào gói cũ nếu muốn nối dài
+            await tx.userSubscription.update({
+              where: { id: currentActiveSub.id },
+              data: {
+                endDate: newEndDate,
+                subscriptionId: subscriptionId, // Đề phòng họ đổi gói khi gia hạn
+              },
+            });
+          } else {
+            // Tạo bản ghi mới nếu gói cũ đã hết hạn
+            await tx.userSubscription.create({
+              data: {
+                userId: userId!,
+                subscriptionId: subscriptionId!,
+                startDate: newStartDate,
+                endDate: newEndDate,
+                status: SubscriptionStatus.ACTIVE,
+                paymentId: paymentId!,
+              },
+            });
+          }
+
+          logger.info(`Subscription renewed for User ${userId}. New end date: ${newEndDate}`);
+        } else {
+          // --- LOGIC ĐĂNG KÝ MỚI  ---
+          await tx.user.update({
+            where: { id: userId },
+            data: { status: UserStatus.ACTIVE },
+          });
+
+          const startDate = new Date();
+          const endDate = new Date();
+          endDate.setDate(startDate.getDate() + subscription.duration);
+
+          await tx.userSubscription.create({
+            data: {
+              userId: userId!,
+              subscriptionId: subscriptionId!,
+              startDate,
+              endDate,
+              status: SubscriptionStatus.ACTIVE,
+              paymentId,
+            },
+          });
+          logger.success(
+            `User with ID: ${userId} successfully activated with subscription ${subscriptionId}.`
+          );
+        }
       });
 
       return "Success";
+      // // Chỉ cần transaction ID khi thanh toán đã hoàn tất
+      // const transactionId =
+      //   typeof session.payment_intent === "string"
+      //     ? session.payment_intent
+      //     : (session.payment_intent as Stripe.PaymentIntent)?.id;
+
+      // // Kiểm tra dữ liệu BẮT BUỘC
+      // if (!paymentId || !userId || !subscriptionId) {
+      //   console.error(
+      //     "Missing User/Payment/Subscription metadata in completed session.",
+      //     session.metadata
+      //   );
+      //   throw new HttpException(
+      //     StatusCodes.BAD_REQUEST,
+      //     "Missing User/Payment/Subscription metadata."
+      //   );
+      // }
+
+      // if (!transactionId) {
+      //   console.error("Missing payment intent ID for completed session.", session.id);
+      //   throw new HttpException(StatusCodes.BAD_REQUEST, "Missing payment intent ID.");
+      // }
+
+      // try {
+      //   await prisma.$transaction(async (tx) => {
+      //     // Lấy thông tin gói dịch vụ
+      //     const subscription = await tx.subscription.findUnique({
+      //       where: { id: subscriptionId },
+      //     });
+
+      //     if (!subscription) {
+      //       // Log lỗi nghiêm trọng, nhưng vẫn phải gửi 200 cho Stripe
+      //       logger.error(`Subscription ID ${subscriptionId} not found. Cannot activate user.`);
+      //       throw new HttpException(
+      //         StatusCodes.INTERNAL_SERVER_ERROR,
+      //         "Subscription data not found."
+      //       );
+      //     }
+
+      //     // A. Cập nhật Payment Status
+      //     // Kiểm tra xem Payment đã được xử lý chưa (tránh webhook gửi lại)
+      //     const existingPayment = await tx.payment.findUnique({ where: { id: paymentId } });
+      //     if (existingPayment?.status === PaymentStatus.SUCCESS) {
+      //       logger.warn(`Payment ID ${paymentId} already processed.`);
+      //       return; // Đã xử lý, thoát transaction
+      //     }
+
+      //     const updatedPayment = await tx.payment.update({
+      //       where: { id: paymentId, userId: userId, status: PaymentStatus.PENDING },
+      //       data: {
+      //         status: PaymentStatus.SUCCESS,
+      //         transactionId: transactionId,
+      //         paymentDate: new Date(),
+      //       },
+      //     });
+
+      //     // B. Cập nhật User Status
+      //     await tx.user.update({
+      //       where: { id: userId, status: UserStatus.PENDING },
+      //       data: { status: UserStatus.ACTIVE },
+      //     });
+
+      //     // C. Tạo UserSubscription
+      //     const durationDays = subscription.duration;
+      //     const startDate = new Date();
+      //     const endDate = new Date(startDate);
+      //     endDate.setDate(startDate.getDate() + durationDays);
+
+      //     await tx.userSubscription.create({
+      //       data: {
+      //         userId: userId,
+      //         subscriptionId: subscriptionId,
+      //         paymentId: updatedPayment.id,
+      //         startDate: startDate,
+      //         endDate: endDate,
+      //         status: SubscriptionStatus.ACTIVE,
+      //       },
+      //     });
+      //     logger.success(
+      //       `User with ID: ${userId} successfully activated with subscription ${subscriptionId}.`
+      //     );
+      //   });
+
+      //   return "Success";
     } catch (e) {
       // Log lỗi transaction và throw lại để Controller xử lý response code (4xx, 5xx)
       console.error(`Transaction failed for Payment ID ${paymentId}:`, e);

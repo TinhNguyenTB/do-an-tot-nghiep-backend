@@ -23,6 +23,12 @@ class PermissionDto {
   @IsString()
   @IsNotEmpty({ message: "Tên quyền không được để trống." })
   name!: string;
+
+  @IsOptional()
+  description?: string;
+
+  @IsOptional()
+  organizationId?: number | null;
 }
 
 // --- Cấu trúc cho Role ---
@@ -74,6 +80,13 @@ export class UpdateRoleDto {
     message: "Mô tả không được vượt quá 255 ký tự.",
   })
   description?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 255, {
+    message: "Tên không được vượt quá 255 ký tự.",
+  })
+  name?: string;
 
   // ✅ Role kế thừa (ROLE ID MỚI: NUMBER[])
   @IsOptional()
