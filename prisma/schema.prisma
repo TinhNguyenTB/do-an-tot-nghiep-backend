@@ -18,6 +18,7 @@ enum PaymentType {
   REGISTER
   EXTEND
   RESTART
+  CHANGE_PLAN
 }
 
 enum PaymentStatus {
@@ -124,6 +125,7 @@ model User {
   name           String? @db.VarChar(255)
   avatar         String?
   publicId       String?
+  balance        Decimal @default(0) @db.Decimal(12, 2)
 
   status    UserStatus
   createdAt DateTime   @default(now()) @map("created_at")

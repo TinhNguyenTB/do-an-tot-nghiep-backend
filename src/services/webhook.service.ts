@@ -56,6 +56,10 @@ export async function handleWebhook(rawBody: Buffer, signature: string): Promise
         ? session.payment_intent
         : (session.payment_intent as Stripe.PaymentIntent)?.id;
 
+    const isChangePlan = session?.metadata?.isChangePlan === "true";
+    const useBalance = session?.metadata?.useBalance === "true";
+    const oldSubId = safeParseInt(session.metadata?.oldSubId);
+
     try {
       const result = await prisma.$transaction(async (tx) => {
         const user = await tx.user.findUnique({
@@ -82,9 +86,41 @@ export async function handleWebhook(rawBody: Buffer, signature: string): Promise
 
         let finalEndDate: Date;
 
-        if (isRenewal) {
-          // --- LOGIC GIA HẠN (CỘNG DỒN) ---
+        // --- NHÁNH 1: THAY ĐỔI GÓI (UPGRADE/DOWNGRADE) ---
+        if (isChangePlan) {
+          // A. Trừ hết balance cũ nếu metadata báo đã dùng để khấu trừ trên Stripe
+          if (useBalance) {
+            await tx.user.update({
+              where: { id: userId },
+              data: { balance: 0 },
+            });
+          }
 
+          // B. Hủy gói cũ ngay lập tức
+          if (oldSubId) {
+            await tx.userSubscription.update({
+              where: { id: oldSubId },
+              data: { status: SubscriptionStatus.EXPIRED },
+            });
+          }
+
+          // C. Kích hoạt gói mới từ thời điểm hiện tại
+          const startDate = new Date();
+          finalEndDate = dayjs(startDate).add(subscription.duration, "day").toDate();
+
+          await tx.userSubscription.create({
+            data: {
+              userId: userId!,
+              subscriptionId: subscriptionId!,
+              startDate,
+              endDate: finalEndDate,
+              status: SubscriptionStatus.ACTIVE,
+              paymentId: updatedPayment.id,
+            },
+          });
+        }
+        // --- NHÁNH 2: GIA HẠN ---
+        else if (isRenewal) {
           // Tìm gói cũ đang ACTIVE
           const currentActiveSub = await tx.userSubscription.findFirst({
             where: {
@@ -153,18 +189,24 @@ export async function handleWebhook(rawBody: Buffer, signature: string): Promise
           price: subscription.price,
           expiryDate: finalEndDate,
           isRenewal: isRenewal,
+          isChangePlan,
         };
       });
 
+      // 2. Gửi Email (Xác định subject linh hoạt hơn)
+      let subject = "Kích hoạt dịch vụ thành công";
+      if (result.isRenewal) subject = "Gia hạn dịch vụ thành công";
+      if (result.isChangePlan) subject = "Thay đổi gói dịch vụ thành công";
+
       await sendMailTemplate({
         to: result.email,
-        subject: result.isRenewal ? "Gia hạn dịch vụ thành công" : "Kích hoạt dịch vụ thành công",
+        subject,
         template: "subscription-success",
         context: {
           name: result.name,
           subName: result.subName,
           expiryDate: dayjs(result.expiryDate).format("DD/MM/YYYY"),
-          type: result.isRenewal ? "gia hạn" : "đăng ký mới",
+          type: result.isChangePlan ? "thay đổi gói" : result.isRenewal ? "gia hạn" : "đăng ký mới",
           year: new Date().getFullYear(),
         },
       });

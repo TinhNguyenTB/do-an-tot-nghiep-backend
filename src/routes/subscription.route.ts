@@ -52,4 +52,11 @@ router.post(
   subscriptionController.renewSubscription
 );
 
+router.post(
+  "/subscriptions/change",
+  authMiddleware,
+  // rbacMiddleware,
+  subscriptionController.changeSubscription
+);
+
 export const subscriptionRoute = router;

@@ -832,6 +832,7 @@ export async function getUserProfile(userId: number) {
       status: true,
       avatar: true,
       createdAt: true,
+      balance: true,
 
       organization: {
         select: {

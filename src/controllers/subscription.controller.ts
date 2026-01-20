@@ -2,7 +2,11 @@ import { Request, Response } from "express";
 import { logger } from "@/utils/logger";
 import { wrapAsync } from "@/utils/wrapAsync";
 import * as subService from "@/services/subscription.service";
-import { CreateSubscriptionDto, RenewSubscriptionDto } from "@/dtos/subscription.dto";
+import {
+  ChangeSubscriptionDto,
+  CreateSubscriptionDto,
+  RenewSubscriptionDto,
+} from "@/dtos/subscription.dto";
 import { StatusCodes } from "http-status-codes";
 import { AuthenticatedRequest } from "@/middlewares/auth.middleware";
 
@@ -70,6 +74,15 @@ const getMySubscriptionHandler = wrapAsync(async (req: AuthenticatedRequest, res
   res.status(StatusCodes.OK).json(result);
 });
 
+const changeSubscription = wrapAsync(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user?.id;
+  const { newSubId } = req.body as ChangeSubscriptionDto;
+
+  const result = await subService.changeSubscription(userId!, newSubId);
+  res.locals.message = `Thay đổi gói dịch vụ ID: ${newSubId}`;
+  res.status(StatusCodes.OK).json(result);
+});
+
 export const subscriptionController = {
   createSubscription,
   getSubscriptions,
@@ -78,4 +91,5 @@ export const subscriptionController = {
   deleteSubscription,
   renewSubscription,
   getMySubscriptionHandler,
+  changeSubscription,
 };

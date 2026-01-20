@@ -3,6 +3,7 @@ import { CreateSubscriptionDto } from "@/dtos/subscription.dto";
 import { HttpException } from "@/exceptions/http-exception";
 import prisma from "@/prismaClient";
 import { PaymentStatus, PaymentType, Prisma, SubscriptionStatus, UserStatus } from "@prisma/client";
+import dayjs from "dayjs";
 import { StatusCodes } from "http-status-codes";
 
 async function checkSubscriptionExists(id: number): Promise<boolean> {
@@ -251,4 +252,123 @@ export async function getMySubscription(userId: number) {
   }
 
   return currentSub;
+}
+
+export async function changeSubscription(userId: number, newSubId: number) {
+  return await prisma.$transaction(async (tx) => {
+    // 1. Lấy thông tin User (kèm balance), gói cũ và gói mới
+    const user = await tx.user.findUnique({ where: { id: userId } });
+    const currentSub = await tx.userSubscription.findFirst({
+      where: { userId, status: "ACTIVE" },
+      include: { subscription: true },
+    });
+    const newSub = await tx.subscription.findUnique({ where: { id: newSubId } });
+
+    if (!newSub || !user) throw new HttpException(StatusCodes.BAD_REQUEST, "Dữ liệu không hợp lệ");
+
+    // 2. Tính số tiền dư từ gói cũ (Pro-rata)
+    let oldSubCredit = 0;
+    if (currentSub) {
+      const remainingDays = dayjs(currentSub.endDate).diff(dayjs(), "day");
+      if (remainingDays > 0) {
+        const pricePerDay =
+          currentSub.subscription.price.toNumber() / currentSub.subscription.duration;
+        oldSubCredit = Math.round(pricePerDay * remainingDays);
+      }
+    }
+
+    // 3. Tổng "nguồn tiền" khách đang có = Tiền dư gói cũ + Tiền trong Balance
+    const totalCredit = user.balance.toNumber() + oldSubCredit;
+    const newSubPrice = newSub.price.toNumber();
+
+    // Số tiền thực tế cần phải nạp thêm qua Stripe
+    const amountToPay = newSubPrice - totalCredit;
+
+    // --- TRƯỜNG HỢP 1: PHẢI THANH TOÁN THÊM ---
+    if (amountToPay > 0) {
+      const payment = await tx.payment.create({
+        data: {
+          userId,
+          subscriptionId: newSub.id,
+          amount: amountToPay,
+          paymentType: PaymentType.CHANGE_PLAN,
+          status: PaymentStatus.PENDING,
+        },
+      });
+
+      // 4. Lấy hoặc tạo Stripe Customer
+      let stripe_customer = await prisma.stripeCustomer.findUnique({
+        where: { customerId: user.id },
+      });
+
+      if (!stripe_customer) {
+        const customer = await stripe.customers.create({ email: user.email });
+        stripe_customer = await prisma.stripeCustomer.create({
+          data: { customerId: user.id, stripeCustomerId: customer.id },
+        });
+      }
+      //@ts-ignore
+      const session = await stripe.checkout.sessions.create({
+        customer: stripe_customer.stripeCustomerId,
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price_data: {
+              currency: "vnd",
+              product_data: {
+                name: `Nâng cấp gói ${newSub.name}`,
+                description: `Đã khấu trừ ${totalCredit.toLocaleString()}đ từ gói cũ và số dư tài khoản.`,
+              },
+              unit_amount: amountToPay,
+            },
+            quantity: 1,
+          },
+        ],
+        mode: "payment",
+        metadata: {
+          paymentId: payment.id,
+          userId,
+          subscriptionId: newSub.id,
+          isChangePlan: "true",
+          oldSubId: currentSub?.id?.toString(),
+          useBalance: "true", // Đánh dấu để Webhook biết cần trừ hết balance về 0
+        },
+        success_url: `${process.env.CLIENT_URL}/current-subscription?success=true`,
+        cancel_url: `${process.env.CLIENT_URL}/current-subscription?canceled=true`,
+      });
+
+      return { type: "PAYMENT_REQUIRED", url: session.url };
+    }
+
+    // --- TRƯỜNG HỢP 2: TỰ TRẢ BẰNG CREDIT/BALANCE (KHÔNG CẦN STRIPE) ---
+    else {
+      // Hủy gói cũ
+      if (currentSub) {
+        await tx.userSubscription.update({
+          where: { id: currentSub.id },
+          data: { status: "EXPIRED" },
+        });
+      }
+
+      // Kích hoạt gói mới
+      await tx.userSubscription.create({
+        data: {
+          userId,
+          subscriptionId: newSub.id,
+          startDate: new Date(),
+          endDate: dayjs().add(newSub.duration, "day").toDate(),
+          status: "ACTIVE",
+        },
+      });
+
+      // Cập nhật lại số dư mới (Thừa bao nhiêu thì cộng vào balance, thiếu bao nhiêu trừ bấy nhiêu)
+      // Vì amountToPay <= 0 nên Math.abs(amountToPay) chính là số dư còn lại sau khi mua gói
+      await tx.user.update({
+        where: { id: userId },
+        data: { balance: Math.abs(amountToPay) },
+      });
+
+      return { type: "SUCCESS_INSTANT", message: "Đổi gói thành công bằng số dư tài khoản." };
+    }
+  });
 }

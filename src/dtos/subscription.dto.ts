@@ -23,3 +23,9 @@ export class RenewSubscriptionDto {
   @Min(1)
   subscriptionId!: number;
 }
+
+export class ChangeSubscriptionDto {
+  @IsNumber()
+  @Min(1)
+  newSubId!: number;
+}
