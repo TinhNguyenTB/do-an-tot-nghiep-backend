@@ -50,6 +50,8 @@ export async function getAllPermissions(
         name: true,
         description: true,
         organizationId: true,
+        createdAt: true,
+        updatedAt: true,
       },
     }),
 

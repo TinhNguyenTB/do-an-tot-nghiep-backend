@@ -72,6 +72,7 @@ export async function getAllSubscriptions(queryParams: { [key: string]: any }) {
         price: true,
         userLimit: true,
         createdAt: true,
+        updatedAt: true,
       },
     }),
 

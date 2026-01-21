@@ -449,6 +449,7 @@ export async function getAllUsers(
           },
         },
         createdAt: true,
+        updatedAt: true,
         // CẬP NHẬT SELECT ROLE: Phải JOIN lồng nhau để lấy TÊN VAI TRÒ
         roles: {
           select: {

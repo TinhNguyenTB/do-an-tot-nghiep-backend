@@ -16,6 +16,17 @@ const getOrgPaymentHistory = wrapAsync(async (req: AuthenticatedRequest, res: Re
   res.status(StatusCodes.OK).json(result);
 });
 
+const getTransactionHistory = wrapAsync(async (req: Request, res: Response) => {
+  logger.info("Fetching all transaction history...");
+
+  const queryParams = req.query;
+  const result = await paymentService.getAllTransactionHistory(queryParams);
+
+  res.locals.message = "Lấy danh sách thanh toán thành công.";
+  res.status(StatusCodes.OK).json(result);
+});
+
 export const paymentController = {
   getOrgPaymentHistory,
+  getTransactionHistory,
 };
