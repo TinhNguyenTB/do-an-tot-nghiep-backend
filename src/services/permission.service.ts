@@ -22,6 +22,8 @@ export async function getAllPermissions(
   }
   where.organizationId = organizationId;
 
+  console.log(organizationId);
+
   if (search) {
     where.OR = [
       {

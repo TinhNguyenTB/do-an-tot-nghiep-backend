@@ -11,7 +11,7 @@ const getPermissions = wrapAsync(async (req: AuthenticatedRequest, res: Response
 
   const queryParams = req.query;
   const organizationId = req.user?.organizationId!;
-  const result = await permissionService.getAllPermissions(queryParams, +organizationId);
+  const result = await permissionService.getAllPermissions(queryParams, organizationId);
 
   res.locals.message = "Lấy danh sách quyền thành công.";
   res.status(StatusCodes.OK).json(result);
