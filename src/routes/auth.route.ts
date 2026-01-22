@@ -10,6 +10,7 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
   UpdateProfileDto,
+  VerifyOTPDto,
 } from "@/dtos/auth.dto";
 import { authController } from "@/controllers/auth.controller";
 import { uploadMiddleware } from "@/middlewares/upload.middleware";
@@ -46,6 +47,8 @@ router.post(
 );
 
 router.post("/auth/reset-password", ValidationPipe(ResetPasswordDto), authController.resetPassword);
+
+router.post("/auth/verifyOTP", ValidationPipe(VerifyOTPDto), authController.verifyOTP);
 
 router.post("/auth/upload-avatar", authMiddleware, uploadMiddleware, userController.uploadAvatar);
 

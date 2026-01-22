@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { logger } from "@/utils/logger";
 import { wrapAsync } from "@/utils/wrapAsync";
 import * as userService from "@/services/user.service";
-import { CreateUserDto, RegisterUserDto, UpdateUserDto } from "@/dtos/user.dto";
+import { CreateUserDto, RegisterUserDto, SendOTPDto, UpdateUserDto } from "@/dtos/user.dto";
 import { StatusCodes } from "http-status-codes";
 import { LoginDto } from "@/dtos/login.dto";
 import ms from "ms";
@@ -10,6 +10,16 @@ import { RePaymentDto } from "@/dtos/re-payment.dto";
 import { generateToken, verifyToken } from "@/utils/jwtProvider";
 import { AuthenticatedRequest } from "@/middlewares/auth.middleware";
 import { ChangePasswordDto } from "@/dtos/auth.dto";
+
+const sendOTP = wrapAsync(async (req: Request, res: Response) => {
+  logger.info("Send OTP register...");
+  const dto = req.body as SendOTPDto;
+  const result = await userService.generateAndSendOTP(dto);
+
+  // 3. Phản hồi thành công (202 Accepted vì cần chờ thanh toán)
+  res.locals.message = "Mã OTP đã được gửi. Vui lòng kiểm tra email.";
+  res.status(StatusCodes.ACCEPTED).json(result);
+});
 
 const registerUser = wrapAsync(async (req: Request, res: Response) => {
   logger.info("Starting user registration (PENDING payment)...");
@@ -182,4 +192,5 @@ export const userController = {
   uploadAvatar,
   getProfile,
   deleteUser,
+  sendOTP,
 };

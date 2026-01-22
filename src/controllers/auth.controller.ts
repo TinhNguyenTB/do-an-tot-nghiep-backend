@@ -2,7 +2,7 @@ import { wrapAsync } from "@/utils/wrapAsync";
 import { Request, Response } from "express";
 import * as authService from "@/services/auth.service";
 import { StatusCodes } from "http-status-codes";
-import { ForgotPasswordDto, UpdateProfileDto } from "@/dtos/auth.dto";
+import { ForgotPasswordDto, UpdateProfileDto, VerifyOTPDto } from "@/dtos/auth.dto";
 import { logger } from "@/utils/logger";
 import { AuthenticatedRequest } from "@/middlewares/auth.middleware";
 
@@ -60,9 +60,19 @@ const checkEmailAvailability = wrapAsync(async (req: Request, res: Response) => 
   }
 });
 
+const verifyOTP = wrapAsync(async (req: Request, res: Response) => {
+  logger.info(`Validate OTP`);
+  const dto = req.body as VerifyOTPDto;
+
+  const result = await authService.verifyOTP(dto);
+
+  res.status(StatusCodes.OK).json(result);
+});
+
 export const authController = {
   forgotPassword,
   resetPassword,
   updateProfile,
   checkEmailAvailability,
+  verifyOTP,
 };

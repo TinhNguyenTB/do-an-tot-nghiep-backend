@@ -25,7 +25,7 @@ export async function getAllOrganizations(queryParams: { [key: string]: any }) {
       select: {
         id: true,
         name: true,
-        description: true,
+        phoneNumber: true,
         createdAt: true,
         updatedAt: true,
         _count: {

@@ -22,8 +22,6 @@ export async function getAllPermissions(
   }
   where.organizationId = organizationId;
 
-  console.log(organizationId);
-
   if (search) {
     where.OR = [
       {
@@ -76,7 +74,7 @@ export async function getAllPermissions(
 }
 
 export async function createPermission(dto: CreatePermissionDto) {
-  const { name, description, organizationId } = dto;
+  const { name, description, organizationId, endpoints } = dto;
   const orgId = organizationId ?? null; // Chuẩn hóa undefined sang null cho Prisma
 
   // 1. Kiểm tra Permission tồn tại (theo cặp [organizationId, name])
@@ -111,12 +109,22 @@ export async function createPermission(dto: CreatePermissionDto) {
       name: name,
       description: description,
       organizationId: orgId,
+      endpoints: {
+        create:
+          endpoints?.map((ep) => ({
+            httpMethod: ep.httpMethod.toUpperCase(),
+            endpoint: ep.endpoint,
+          })) || [],
+      },
     },
     select: {
       id: true,
       name: true,
       description: true,
       organizationId: true,
+      endpoints: true,
+      createdAt: true,
+      updatedAt: true,
     },
   });
 
@@ -124,7 +132,7 @@ export async function createPermission(dto: CreatePermissionDto) {
 }
 
 export async function handleUpdatePermission(permissionId: number, dto: UpdatePermissionDto) {
-  const { name, description } = dto;
+  const { name, description, endpoints } = dto;
 
   // 1. Kiểm tra Permission tồn tại
   const existingPermission = await prisma.permission.findUnique({
@@ -136,29 +144,13 @@ export async function handleUpdatePermission(permissionId: number, dto: UpdatePe
     throw new HttpException(StatusCodes.NOT_FOUND, "Permission không tìm thấy.");
   }
 
-  // 2. Chuẩn bị dữ liệu cập nhật
-  const updateData: Prisma.PermissionUpdateInput = {};
-
-  if (name !== undefined) {
-    updateData.name = name;
-  }
-  if (description !== undefined) {
-    updateData.description = description;
-  }
-
-  // Nếu không có dữ liệu để cập nhật, dừng lại
-  if (Object.keys(updateData).length === 0) {
-    return existingPermission;
-  }
-
-  // 3. Kiểm tra trùng lặp Tên (nếu Tên bị thay đổi)
-  // Phải đảm bảo tên mới không trùng với các Permission khác trong cùng organizationId
+  // 2. Kiểm tra trùng lặp Tên (nếu Tên bị thay đổi)
   if (name && name !== existingPermission.name) {
     const conflictPermission = await prisma.permission.findFirst({
       where: {
         name: name,
-        organizationId: existingPermission.organizationId, // Kiểm tra trong cùng phạm vi (Global hoặc Org)
-        NOT: { id: permissionId }, // Loại trừ chính bản thân Permission đang cập nhật
+        organizationId: existingPermission.organizationId,
+        NOT: { id: permissionId },
       },
     });
 
@@ -170,18 +162,41 @@ export async function handleUpdatePermission(permissionId: number, dto: UpdatePe
     }
   }
 
-  // 4. Thực hiện cập nhật
-  const updatedPermission = await prisma.permission.update({
-    where: { id: permissionId },
-    data: updateData,
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      organizationId: true,
-      createdAt: true,
-      updatedAt: true,
-    },
+  // 3. Thực hiện cập nhật trong Transaction
+  // Chúng ta dùng deleteMany và create để "đồng bộ" lại danh sách endpoints
+  const updatedPermission = await prisma.$transaction(async (tx) => {
+    // A. Cập nhật thông tin cơ bản của Permission
+    const permission = await tx.permission.update({
+      where: { id: permissionId },
+      data: {
+        name,
+        description,
+      },
+    });
+
+    // B. Nếu dto có truyền mảng endpoints, thực hiện cập nhật lại danh sách này
+    if (endpoints) {
+      // B1: Xóa toàn bộ endpoints cũ gắn với permission này
+      await tx.endpointPermission.deleteMany({
+        where: { permissionId: permissionId },
+      });
+
+      // B2: Tạo lại danh sách endpoints mới từ dữ liệu gửi lên
+      if (endpoints.length > 0) {
+        await tx.endpointPermission.createMany({
+          data: endpoints.map((ep) => ({
+            permissionId: permissionId,
+            httpMethod: ep.httpMethod.toUpperCase(),
+            endpoint: ep.endpoint,
+          })),
+        });
+      }
+    }
+
+    return tx.permission.findUnique({
+      where: { id: permissionId },
+      include: { endpoints: true }, // Trả về kèm danh sách mới để FE cập nhật UI
+    });
   });
 
   return updatedPermission;
@@ -197,6 +212,7 @@ export async function getPermissionDetail(permissionId: number) {
       organizationId: true,
       createdAt: true,
       updatedAt: true,
+      endpoints: true,
     },
   });
 

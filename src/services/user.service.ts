@@ -1,5 +1,5 @@
 import { HttpException } from "@/exceptions/http-exception";
-import { CreateUserDto, RegisterUserDto, UpdateUserDto } from "@/dtos/user.dto";
+import { CreateUserDto, RegisterUserDto, SendOTPDto, UpdateUserDto } from "@/dtos/user.dto";
 import prisma from "@/prismaClient";
 import { StatusCodes } from "http-status-codes";
 import * as bcrypt from "bcrypt";
@@ -14,6 +14,8 @@ import { RePaymentDto } from "@/dtos/re-payment.dto";
 import { getUserPermissions } from "@/utils/rbacUtils";
 import { uploadImageToCloudinary } from "@/utils/uploadImageToCloudinary";
 import { ChangePasswordDto } from "@/dtos/auth.dto";
+import { sendMailTemplate } from "@/utils/mail";
+import { addMinutes } from "date-fns";
 
 export async function createUser(dto: CreateUserDto, defaultPassword: string) {
   // 1. Kiểm tra email duy nhất
@@ -113,6 +115,41 @@ export async function createUser(dto: CreateUserDto, defaultPassword: string) {
   });
 }
 
+export async function generateAndSendOTP(dto: SendOTPDto) {
+  const { email } = dto;
+  // 1. Tạo mã 6 số ngẫu nhiên
+  const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = addMinutes(new Date(), 5); // Hết hạn sau 5 phút
+
+  // 2. Lưu vào Database (Nếu email đã có OTP thì cập nhật mã mới)
+  await prisma.otp.upsert({
+    where: { email },
+    update: {
+      code: otpCode,
+      expiresAt: expiresAt,
+      createdAt: new Date(),
+    },
+    create: {
+      email,
+      code: otpCode,
+      expiresAt: expiresAt,
+    },
+  });
+
+  await sendMailTemplate({
+    to: email,
+    subject: "Mã OTP đăng ký tài khoản",
+    template: "register-otp",
+    context: {
+      email: email,
+      otp: otpCode,
+      year: new Date().getFullYear(),
+    },
+  });
+
+  return { expiresIn: 300 };
+}
+
 /**
  * Thực hiện logic đăng ký: Tạo User và Payment PENDING
  */
@@ -157,6 +194,7 @@ export async function register(dto: RegisterUserDto) {
         data: {
           name: dto.organizationName!,
           ownerId: user.id,
+          phoneNumber: dto.organizationPhoneNumber,
         },
       });
 
@@ -839,7 +877,6 @@ export async function getUserProfile(userId: number) {
         select: {
           id: true,
           name: true,
-          description: true,
         },
       },
 

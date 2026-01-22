@@ -4,7 +4,7 @@ import { ValidationPipe } from "@/pipes/validation.pipe";
 import { RePaymentDto } from "@/dtos/re-payment.dto";
 import { authMiddleware } from "@/middlewares/auth.middleware";
 import { rbacMiddleware } from "@/middlewares/rbac.middleware";
-import { UpdateUserDto } from "@/dtos/user.dto";
+import { SendOTPDto, UpdateUserDto } from "@/dtos/user.dto";
 
 const router = Router();
 
@@ -45,5 +45,12 @@ router.delete(
 );
 
 router.post("/users/re-payment", ValidationPipe(RePaymentDto), userController.rePayment);
+
+router.post(
+  "/users/sendOTP",
+  // rbacMiddleware,
+  ValidationPipe(SendOTPDto),
+  userController.sendOTP
+);
 
 export const userRoute = router;

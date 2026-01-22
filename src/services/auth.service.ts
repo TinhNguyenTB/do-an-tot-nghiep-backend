@@ -5,7 +5,7 @@ import { sendMailTemplate } from "@/utils/mail";
 import { StatusCodes } from "http-status-codes";
 import crypto from "crypto";
 import * as bcrypt from "bcrypt";
-import { UpdateProfileDto } from "@/dtos/auth.dto";
+import { UpdateProfileDto, VerifyOTPDto } from "@/dtos/auth.dto";
 
 export async function sendResetOtp(email: string) {
   const user = await prisma.user.findUnique({ where: { email } });
@@ -115,4 +115,30 @@ export async function checkEmailExists(email: string): Promise<boolean> {
   });
 
   return !!user;
+}
+
+export async function verifyOTP(dto: VerifyOTPDto) {
+  // 1. Tìm mã OTP mới nhất của email này
+  const otpRecord = await prisma.otp.findFirst({
+    where: { email: dto.email },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!otpRecord) {
+    throw new HttpException(StatusCodes.BAD_REQUEST, "Không tìm thấy yêu cầu xác thực.");
+  }
+
+  // 2. Kiểm tra mã có khớp không
+  if (otpRecord.code !== dto.otp) {
+    throw new HttpException(StatusCodes.BAD_REQUEST, "Mã OTP không chính xác.");
+  }
+
+  // 3. Kiểm tra thời gian hết hạn
+  if (new Date() > otpRecord.expiresAt) {
+    throw new HttpException(StatusCodes.BAD_REQUEST, "Mã OTP đã hết hạn.");
+  }
+
+  // 5. Xóa mã OTP sau khi dùng xong (Bảo mật)
+  await prisma.otp.deleteMany({ where: { email: dto.email } });
+  return { isValid: true };
 }

@@ -8,7 +8,15 @@ import {
   Length,
 } from "class-validator";
 
+export class SendOTPDto {
+  @IsEmail({}, { message: "Email phải có định dạng hợp lệ." })
+  email!: string;
+}
+
 export class RegisterUserDto {
+  @IsOptional()
+  otp?: string;
+
   @IsEmail({}, { message: "Email phải có định dạng hợp lệ." })
   email!: string;
 
@@ -20,9 +28,11 @@ export class RegisterUserDto {
   @Length(2, 100, { message: "Tên phải dài từ 2 đến 100 ký tự." })
   name!: string;
 
-  @IsOptional()
   @IsString({ message: "Tên tổ chức phải là chuỗi." })
-  organizationName?: string;
+  organizationName!: string;
+
+  @IsString({ message: "SDT tổ chức phải là chuỗi." })
+  organizationPhoneNumber!: string;
 
   @IsNotEmpty({ message: "ID gói dịch vụ không được để trống." })
   subscriptionId!: number;
