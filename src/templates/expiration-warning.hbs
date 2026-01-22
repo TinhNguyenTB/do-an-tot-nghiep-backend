@@ -1,0 +1,108 @@
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Cảnh báo hết hạn gói dịch vụ</title>
+    <style>
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+        background-color: #f5f5f5;
+        padding: 20px;
+      }
+      .container {
+        max-width: 480px;
+        margin: auto;
+        background: #ffffff;
+        border-radius: 8px;
+        padding: 24px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      }
+      .title {
+        font-size: 18px;
+        font-weight: bold;
+        margin-bottom: 16px;
+        color: #d9534f; /* Màu đỏ cảnh báo */
+      }
+      .package-info {
+        background-color: #fff1f0;
+        border: 1px solid #ffa39e;
+        border-radius: 4px;
+        padding: 16px;
+        text-align: center;
+        margin: 24px 0;
+      }
+      .package-name {
+        font-size: 20px;
+        font-weight: bold;
+        color: #cf1322;
+        display: block;
+      }
+      .expiry-date {
+        font-size: 14px;
+        color: #555555;
+        margin-top: 8px;
+      }
+      .text {
+        font-size: 14px;
+        color: #555555;
+        line-height: 1.6;
+      }
+      .btn-container {
+        text-align: center;
+        margin-top: 24px;
+      }
+      .btn-primary {
+        background-color: #1677ff;
+        color: #ffffff !important;
+        padding: 12px 32px;
+        text-decoration: none;
+        border-radius: 6px;
+        font-weight: bold;
+        display: inline-block;
+      }
+      .footer {
+        margin-top: 24px;
+        font-size: 12px;
+        color: #999999;
+        text-align: center;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container">
+      <div class="title">Thông báo hết hạn dịch vụ</div>
+
+      <p class="text">
+        Xin chào
+        <b>{{userName}}</b>,
+      </p>
+
+      <p class="text">
+        Hệ thống ghi nhận gói dịch vụ của tổ chức bạn sắp hết hạn. Vui lòng kiểm tra thông tin chi
+        tiết dưới đây:
+      </p>
+
+      <div class="package-info">
+        <span class="package-name">{{packageName}}</span>
+        <div class="expiry-date">Ngày hết hạn: <b>{{expiryDate}}</b></div>
+      </div>
+
+      <p class="text">
+        Để tránh bị gián đoạn các phân hệ và dịch vụ đang sử dụng, vui lòng thực hiện gia hạn trong
+        vòng
+        <b>3 ngày</b>
+        tới.
+      </p>
+
+      <p class="text" style="margin-top: 24px;">
+        Nếu bạn đã gia hạn trước đó, vui lòng bỏ qua thông báo này.
+      </p>
+
+      <div class="footer">
+        ©
+        {{year}}
+        Management Accounts. All rights reserved.
+      </div>
+    </div>
+  </body>
+</html>

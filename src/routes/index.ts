@@ -8,11 +8,13 @@ import { endpointPermissionRoute } from "@/routes/endpoint-permission.route";
 import { permissionRoute } from "@/routes/permission.route";
 import { analyticsRoute } from "@/routes/analytics.routes";
 import { paymentRoute } from "@/routes/payment.route";
+import { globalLimiter } from "@/middlewares/rateLimiter.middleware";
 
 const router = Router();
 
 router.use(
   "/",
+  globalLimiter,
   authRoute,
   userRoute,
   subscriptionRoute,

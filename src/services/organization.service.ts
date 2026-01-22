@@ -1,5 +1,8 @@
+import { UpdateOrganizationDto } from "@/dtos/organization.dto";
+import { HttpException } from "@/exceptions/http-exception";
 import prisma from "@/prismaClient";
 import { Prisma } from "@prisma/client";
+import { StatusCodes } from "http-status-codes";
 
 export async function getAllOrganizations(queryParams: { [key: string]: any }) {
   const page = Number(queryParams.page) || 1;
@@ -22,12 +25,26 @@ export async function getAllOrganizations(queryParams: { [key: string]: any }) {
       take: size,
       orderBy: { createdAt: "desc" },
       where,
+
       select: {
         id: true,
         name: true,
         phoneNumber: true,
         createdAt: true,
         updatedAt: true,
+        owner: {
+          select: {
+            userSubscriptions: {
+              where: { status: "ACTIVE" },
+              take: 1,
+              select: {
+                subscription: {
+                  select: { name: true },
+                },
+              },
+            },
+          },
+        },
         _count: {
           select: {
             users: true, // Đếm số lượng Users
@@ -42,14 +59,17 @@ export async function getAllOrganizations(queryParams: { [key: string]: any }) {
   ]);
 
   const totalPages = Math.ceil(totalCount / size);
-  const formattedData = data.map((org) => {
-    const { _count, ...rest } = org;
 
-    return {
-      ...rest,
-      userCount: _count.users, // Lấy số lượng Users
-    };
-  });
+  const formattedData = data.map((org) => ({
+    id: org.id,
+    name: org.name,
+    phoneNumber: org.phoneNumber,
+    createdAt: org.createdAt,
+    updatedAt: org.updatedAt,
+    userCount: org._count.users,
+    // Lấy tên gói từ mảng lồng nhau của Owner
+    subscriptionName: org.owner?.userSubscriptions[0]?.subscription?.name || "N/A",
+  }));
 
   return {
     content: formattedData,
@@ -62,4 +82,34 @@ export async function getAllOrganizations(queryParams: { [key: string]: any }) {
       hasPreviousPage: page > 1,
     },
   };
+}
+
+export async function updateOrganization(orgId: number, dto: UpdateOrganizationDto) {
+  const { name, phoneNumber } = dto;
+
+  // 1. Kiểm tra tổ chức có tồn tại không
+  const existingOrg = await prisma.organization.findUnique({
+    where: { id: orgId },
+  });
+
+  if (!existingOrg) {
+    throw new HttpException(StatusCodes.NOT_FOUND, "Tổ chức không tồn tại.");
+  }
+
+  // 2. Cập nhật dữ liệu
+  const updatedOrg = await prisma.organization.update({
+    where: { id: orgId },
+    data: {
+      ...(name && { name }),
+      ...(phoneNumber && { phoneNumber }),
+    },
+    select: {
+      id: true,
+      name: true,
+      phoneNumber: true,
+      updatedAt: true,
+    },
+  });
+
+  return updatedOrg;
 }

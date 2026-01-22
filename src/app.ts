@@ -10,6 +10,7 @@ import { corsConfig } from "@/configs/cors.config";
 import prisma from "@/prismaClient";
 import { webhookRoute } from "@/routes/webhook.route";
 import cookieParser from "cookie-parser";
+import { initCronJobs } from "@/jobs";
 
 const app = express();
 
@@ -32,11 +33,12 @@ app.use(exceptionFilter);
 const PORT = process.env.PORT || 3000;
 async function startServer() {
   try {
-    // Thử kết nối DB (tối đa 30 giây)
     await prisma.$connect();
     logger.success("✅ Prisma connected to database successfully!");
 
-    // Bắt đầu lắng nghe request
+    initCronJobs();
+    logger.info("⏰ Cron Jobs initialized");
+
     const server = app.listen(PORT, () => {
       logger.success(`🚀 Server is running on http://localhost:${PORT}`);
     });
@@ -57,10 +59,8 @@ async function startServer() {
     logger.error("❌ Failed to connect to database!");
     console.error(error);
 
-    // Nếu DB không kết nối được → thoát luôn, không chạy server
     process.exit(1);
   }
 }
 
-// Gọi hàm khởi động
 startServer();

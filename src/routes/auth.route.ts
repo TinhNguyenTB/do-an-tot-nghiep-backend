@@ -14,12 +14,13 @@ import {
 } from "@/dtos/auth.dto";
 import { authController } from "@/controllers/auth.controller";
 import { uploadMiddleware } from "@/middlewares/upload.middleware";
+import { loginLimiter } from "@/middlewares/rateLimiter.middleware";
 
 const router = Router();
 router.post("/auth/check-email", authController.checkEmailAvailability);
 
 router.post("/auth/register", ValidationPipe(RegisterUserDto), userController.registerUser);
-router.post("/auth/login", ValidationPipe(LoginDto), userController.login);
+router.post("/auth/login", loginLimiter, ValidationPipe(LoginDto), userController.login);
 router.delete("/auth/logout", userController.logout);
 router.put("/auth/refresh", userController.refreshToken);
 

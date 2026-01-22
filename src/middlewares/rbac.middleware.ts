@@ -19,9 +19,8 @@ export const rbacMiddleware = async (
   }
 
   // 2. Lấy Route Path: Đây là path trong file router (ví dụ: '/:id', '/')
-  // Cần đảm bảo rằng routePath này khớp với endpoint trong DB (EndpointPermission)
   const routePath = req.route?.path;
-  const httpMethod = req.method;
+  const httpMethod = req.method.toUpperCase();
 
   if (!routePath) {
     // Nếu không thể lấy routePath (thường không xảy ra), bỏ qua hoặc báo lỗi
@@ -36,38 +35,38 @@ export const rbacMiddleware = async (
   }
 
   // 3. Truy vấn DB để lấy Permission BẮT BUỘC cho endpoint này
-  const routePermission = await prisma.endpointPermission.findUnique({
+  const endpointConfig = await prisma.endpointPermission.findUnique({
     where: {
       httpMethod_endpoint: {
         httpMethod: httpMethod,
         endpoint: routePath,
       },
     },
-    select: { permissionName: true },
+    include: {
+      permission: {
+        select: { name: true },
+      },
+    },
   });
 
   // 4. Nếu endpoint KHÔNG được cấu hình trong DB
-  if (!routePermission) {
-    logger.warn(`[RBAC] Route ${httpMethod} ${routePath} không có cấu hình quyền`);
+  if (!endpointConfig) {
+    logger.warn(`[RBAC] Truy cập trái phép: ${httpMethod} ${routePath} chưa được cấu hình.`);
+    return res
+      .status(StatusCodes.FORBIDDEN)
+      .json({ message: "Chức năng này chưa được phân quyền." });
+  }
+
+  const requiredPermissionName = endpointConfig.permission.name;
+
+  const hasPermission = req.user.permissions.includes(requiredPermissionName);
+
+  if (!hasPermission) {
     return res.status(StatusCodes.FORBIDDEN).json({
-      message: "Bạn không có quyền truy cập chức năng này.",
+      message: "Bạn không có quyền thực hiện hành động này.",
+      required: requiredPermissionName,
     });
   }
 
-  const requiredPermission = routePermission.permissionName;
-
-  // 5. Lấy tất cả quyền hiệu quả của người dùng
-  const userPermissions = req.user.permissions;
-
-  // 6. Kiểm tra ủy quyền
-  const hasRequiredPermission = userPermissions.includes(requiredPermission);
-
-  if (hasRequiredPermission) {
-    next(); // Cho phép tiếp tục
-  } else {
-    return res.status(StatusCodes.FORBIDDEN).json({
-      message: "Bạn không có quyền truy cập chức năng này.",
-      required: requiredPermission,
-    });
-  }
+  next();
 };
