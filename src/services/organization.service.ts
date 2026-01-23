@@ -32,6 +32,7 @@ export async function getAllOrganizations(queryParams: { [key: string]: any }) {
         phoneNumber: true,
         createdAt: true,
         updatedAt: true,
+        isActive: true,
         owner: {
           select: {
             userSubscriptions: {
@@ -67,6 +68,7 @@ export async function getAllOrganizations(queryParams: { [key: string]: any }) {
     createdAt: org.createdAt,
     updatedAt: org.updatedAt,
     userCount: org._count.users,
+    isActive: org.isActive,
     // Lấy tên gói từ mảng lồng nhau của Owner
     subscriptionName: org.owner?.userSubscriptions[0]?.subscription?.name || "N/A",
   }));
@@ -113,3 +115,30 @@ export async function updateOrganization(orgId: number, dto: UpdateOrganizationD
 
   return updatedOrg;
 }
+
+export const updateOrgStatus = async (id: number, isActive: boolean) => {
+  // 1. Kiểm tra tổ chức có tồn tại không
+  const organization = await prisma.organization.findUnique({
+    where: { id: Number(id) },
+  });
+
+  if (!organization) {
+    throw new HttpException(StatusCodes.NOT_FOUND, "Không tìm thấy tổ chức");
+  }
+
+  // 2. Cập nhật trạng thái
+  const updatedOrg = await prisma.organization.update({
+    where: { id: id },
+    data: { isActive },
+  });
+  return {
+    isActive: updatedOrg.isActive,
+  };
+  // 3. Log hành động (Nếu bạn đã làm Audit Log)
+  // await createAuditLog(req.user.id, `UPDATE_ORG_STATUS_${isActive}`, id);
+
+  // return res.status(StatusCodes.OK).json({
+  //   message: isActive ? "Đã mở khóa tổ chức" : "Đã khóa tổ chức thành công",
+  //   data: updatedOrg
+  // });
+};

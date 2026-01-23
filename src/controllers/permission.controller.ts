@@ -30,7 +30,7 @@ const createNewPermission = wrapAsync(async (req: Request, res: Response) => {
 const getPermissionById = wrapAsync(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const sub = await permissionService.getPermissionDetail(id);
-  res.locals.message = `Lấy gói quyền ID: ${id} thành công.`;
+  res.locals.message = `Lấy chi tiết quyền thành công.`;
   res.status(StatusCodes.OK).json(sub);
 });
 
@@ -39,7 +39,7 @@ const updatePermission = wrapAsync(async (req: Request, res: Response) => {
   const dto = req.body as UpdatePermissionDto;
 
   const updatedSub = await permissionService.handleUpdatePermission(id, dto);
-  res.locals.message = `Cập nhật quyền ID: ${id} thành công.`;
+  res.locals.message = `Cập nhật quyền thành công.`;
   res.status(StatusCodes.OK).json(updatedSub);
 });
 

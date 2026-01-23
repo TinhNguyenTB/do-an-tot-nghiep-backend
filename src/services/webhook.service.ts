@@ -204,7 +204,7 @@ export async function handleWebhook(rawBody: Buffer, signature: string): Promise
         template: "subscription-success",
         context: {
           name: result.name,
-          subName: result.subName,
+          subName: result.subName.name,
           expiryDate: dayjs(result.expiryDate).format("DD/MM/YYYY"),
           type: result.isChangePlan ? "thay đổi gói" : result.isRenewal ? "gia hạn" : "đăng ký mới",
           year: new Date().getFullYear(),

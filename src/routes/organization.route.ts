@@ -13,6 +13,13 @@ router.get(
   organizationController.getOrganizations
 );
 
+router.post(
+  "/organizations/status",
+  authMiddleware,
+  // rbacMiddleware,
+  organizationController.updateOrgStatus
+);
+
 // router.get(
 //   "/:id",
 //   authMiddleware,

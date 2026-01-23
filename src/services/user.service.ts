@@ -592,6 +592,15 @@ export async function handleLogin(dto: LoginDto) {
     throw new HttpException(StatusCodes.FORBIDDEN, "Email hoặc mật khẩu không chính xác.");
   }
 
+  if (user.organization) {
+    if (!user.organization.isActive) {
+      throw new HttpException(
+        StatusCodes.FORBIDDEN,
+        "Tổ chức của bạn đã bị khóa. Vui lòng liên hệ quản trị viên hệ thống."
+      );
+    }
+  }
+
   // 3. Kiểm tra Trạng thái tài khoản
   checkUserStatus(user.status);
 

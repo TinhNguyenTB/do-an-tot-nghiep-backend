@@ -3,6 +3,7 @@ import { logger } from "@/utils/logger";
 import { wrapAsync } from "@/utils/wrapAsync";
 import { StatusCodes } from "http-status-codes";
 import * as organizationService from "@/services/organization.service";
+import { UpdateOrgStatus } from "@/dtos/organization.dto";
 
 const getOrganizations = wrapAsync(async (req: Request, res: Response) => {
   logger.info("Fetching all organizations with query params...");
@@ -11,6 +12,14 @@ const getOrganizations = wrapAsync(async (req: Request, res: Response) => {
   const result = await organizationService.getAllOrganizations(queryParams);
 
   res.locals.message = "Lấy danh sách tổ chức thành công.";
+  res.status(StatusCodes.OK).json(result);
+});
+
+const updateOrgStatus = wrapAsync(async (req: Request, res: Response) => {
+  const { id, isActive } = req.body as UpdateOrgStatus;
+
+  const result = await organizationService.updateOrgStatus(id, isActive);
+  res.locals.message = `Cập nhật trạng thái tổ chức thành công.`;
   res.status(StatusCodes.OK).json(result);
 });
 
@@ -41,4 +50,5 @@ const getOrganizations = wrapAsync(async (req: Request, res: Response) => {
 
 export const organizationController = {
   getOrganizations,
+  updateOrgStatus,
 };

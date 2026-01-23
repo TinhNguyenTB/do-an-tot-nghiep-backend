@@ -1,4 +1,12 @@
-import { IsString, IsOptional, Length, Matches } from "class-validator";
+import {
+  IsString,
+  IsOptional,
+  Length,
+  Matches,
+  IsBoolean,
+  isNumber,
+  IsNumber,
+} from "class-validator";
 
 export class UpdateOrganizationDto {
   @IsOptional()
@@ -12,4 +20,12 @@ export class UpdateOrganizationDto {
   //     message: "Số điện thoại không đúng định dạng Việt Nam.",
   //   })
   phoneNumber?: string;
+}
+
+export class UpdateOrgStatus {
+  @IsBoolean()
+  isActive!: boolean;
+
+  @IsNumber()
+  id!: number;
 }
