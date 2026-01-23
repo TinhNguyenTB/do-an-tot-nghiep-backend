@@ -28,6 +28,12 @@ class PermissionDto {
   description?: string;
 
   @IsOptional()
+  updatedAt?: string;
+
+  @IsOptional()
+  createdAt?: string;
+
+  @IsOptional()
   organizationId?: number | null;
 }
 

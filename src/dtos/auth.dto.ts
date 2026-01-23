@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsString, Length } from "class-validator";
+import { IsEmail, IsIn, IsNotEmpty, IsString, Length } from "class-validator";
 
 export class ChangePasswordDto {
   @IsNotEmpty({ message: "Mật khẩu cũ không được để trống." })
@@ -35,4 +35,18 @@ export class VerifyOTPDto {
 
   @IsEmail({}, { message: "Email phải có định dạng hợp lệ." })
   email!: string;
+}
+
+export class IntroSpectDto {
+  @IsString({ message: "Phương thức HTTP phải là chuỗi." })
+  @IsNotEmpty({ message: "Phương thức HTTP không được để trống." })
+  @IsIn(["GET", "POST", "PUT", "PATCH", "DELETE"], {
+    message: "Phương thức HTTP không hợp lệ (GET, POST, PUT, PATCH, DELETE).",
+  })
+  method!: string;
+
+  @IsString({ message: "Đường dẫn endpoint phải là chuỗi." })
+  @IsNotEmpty({ message: "Đường dẫn endpoint không được để trống." })
+  @Length(1, 255, { message: "Đường dẫn endpoint không được vượt quá 255 ký tự." })
+  endpoint!: string;
 }

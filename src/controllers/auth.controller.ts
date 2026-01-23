@@ -5,6 +5,7 @@ import { StatusCodes } from "http-status-codes";
 import { ForgotPasswordDto, UpdateProfileDto, VerifyOTPDto } from "@/dtos/auth.dto";
 import { logger } from "@/utils/logger";
 import { AuthenticatedRequest } from "@/middlewares/auth.middleware";
+import prisma from "@/prismaClient";
 
 const forgotPassword = wrapAsync(async (req: Request, res: Response) => {
   logger.info(`Send OTP to ${req.body.email}...`);
@@ -69,10 +70,34 @@ const verifyOTP = wrapAsync(async (req: Request, res: Response) => {
   res.status(StatusCodes.OK).json(result);
 });
 
+const handleIntrospect = wrapAsync(async (req: AuthenticatedRequest, res: Response) => {
+  const { method, endpoint } = req.body;
+
+  const requiredPermission = await prisma.endpointPermission.findFirst({
+    where: {
+      httpMethod: method.toUpperCase(),
+      endpoint: endpoint,
+    },
+    include: { permission: true },
+  });
+
+  if (!requiredPermission) {
+    return res.json({ allowed: false, reason: "Endpoint chưa được cấu hình" });
+  }
+
+  // Kiểm tra User có Permission đó không
+  const hasPermission = req?.user?.permissions.includes(requiredPermission.permission.name);
+
+  return res.json({
+    allowed: hasPermission,
+  });
+});
+
 export const authController = {
   forgotPassword,
   resetPassword,
   updateProfile,
   checkEmailAvailability,
   verifyOTP,
+  handleIntrospect,
 };

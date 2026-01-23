@@ -8,6 +8,7 @@ import { rbacMiddleware } from "@/middlewares/rbac.middleware";
 import {
   ChangePasswordDto,
   ForgotPasswordDto,
+  IntroSpectDto,
   ResetPasswordDto,
   UpdateProfileDto,
   VerifyOTPDto,
@@ -52,5 +53,12 @@ router.post("/auth/reset-password", ValidationPipe(ResetPasswordDto), authContro
 router.post("/auth/verifyOTP", ValidationPipe(VerifyOTPDto), authController.verifyOTP);
 
 router.post("/auth/upload-avatar", authMiddleware, uploadMiddleware, userController.uploadAvatar);
+
+router.post(
+  "/auth/introspect",
+  authMiddleware,
+  ValidationPipe(IntroSpectDto),
+  authController.handleIntrospect
+);
 
 export const authRoute = router;
